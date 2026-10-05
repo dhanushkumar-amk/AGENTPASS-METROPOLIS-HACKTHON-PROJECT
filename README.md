@@ -108,6 +108,13 @@ AgentPass is purpose-built to take advantage of Monad's high-performance archite
 | SpendingPolicyManager | Monad Testnet (`10143`) | _To be deployed in Phase 5_ | — | Planned |
 | AgentWalletFactory | Monad Testnet (`10143`) | _To be deployed in Phase 6_ | — | Planned |
 
+### On-Chain Verification & Explorer Evidence
+
+| Contract Deployment Transaction | Confirmed State Interaction (`Set Greeting`) |
+| :---: | :---: |
+| ![Contract Deployment Transaction](img/sh1.png) | ![Contract State Interaction](img/sh2.png) |
+| *MonadScan: Deployment Tx (`0x0a3161f0...`)* | *MonadScan: On-chain `Set Greeting` call (`0xcae810fa...`)* |
+
 ---
 
 ## Setup and Run Instructions

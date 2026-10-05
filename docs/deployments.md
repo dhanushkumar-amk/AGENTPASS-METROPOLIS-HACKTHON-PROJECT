@@ -26,3 +26,11 @@ forge verify-contract \
 ## Gas Model Considerations
 
 Monad testnet execution may account for gas charges based on the allocated gas limit rather than purely gas used. When running scripts or interacting with contracts, rely on Forge's and Cast's automatic gas estimation rather than artificially elevated gas limits.
+
+## Explorer Screenshots
+
+### 1. Contract Deployment Transaction
+![Contract Deployment Transaction](../img/sh1.png)
+
+### 2. Confirmed State Interaction (`Set Greeting`)
+![Contract State Interaction](../img/sh2.png)
