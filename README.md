@@ -42,7 +42,7 @@ _Placeholder for an architecture diagram._
 
 | Contract | Monad testnet address |
 | --- | --- |
-| _to be added after deployment_ | — |
+| HelloMonad (Verification pipeline) | `0x03ac420bfc16bec578396e7de13792a5c806df50` |
 
 ## Setup and run instructions
 
