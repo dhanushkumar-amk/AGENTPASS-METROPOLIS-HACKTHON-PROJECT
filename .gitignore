@@ -1,0 +1,30 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+out/
+dist/
+build/
+
+# Foundry
+cache/
+broadcast/
+
+# Python
+__pycache__/
+.venv/
+
+# OS
+.DS_Store
+*.log
+
+# Editors / tooling
+.vscode/
+.idea/
+.commandcode/
