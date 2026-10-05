@@ -1,76 +1,214 @@
 # AgentPass
 
-A reusable spending-limit and identity layer for AI agents on Monad. Built for the Metropolis Hackathon.
+A reusable spending-limit and verifiable identity layer for autonomous AI agents on Monad. Built for the Metropolis Hackathon.
 
 **Repo:** https://github.com/dhanushkumar-amk/AGENTPASS-METROPOLIS-HACKTHON-PROJECT
 
+---
+
 ## Track
 
-Trust, Identity & AI Infrastructure
+**Trust, Identity & AI Infrastructure**
 
-## The problem
+---
 
-AI agents increasingly hold keys and act on-chain, but there is no standard way to bound what they can spend or to know which agent took an action. Delegating a full private key to an agent is an all-or-nothing risk.
+## The Problem
 
-## The solution
+AI agents increasingly hold private keys and execute transactions autonomously on-chain. However, giving an agent an unconstrained private key creates an all-or-nothing security risk:
+- **No budget boundaries:** A rogue, hallucinating, or prompt-injected agent can drain all funds in a single transaction.
+- **No attribution:** When multiple agents operate, on-chain observers cannot reliably identify which agent initiated an action.
+- **Binary delegation:** Owners must either give full access or no access, with no granular policy enforcement (per-tx caps, daily velocity limits, approved contracts).
 
-AgentPass gives each AI agent a verifiable identity plus on-chain spending limits: the owner sets the rules, the agent can only transact within them, and every action is attributable back to a specific agent.
+---
 
-## How it uses Monad
+## The Solution
 
-_Placeholder: details on how the contracts and agent flow run on the Monad testnet will be filled in as they are implemented._
+AgentPass introduces a programmable smart-account and policy layer tailored for AI agents:
+1. **Verifiable Identity:** Each agent is registered with an on-chain identity linked to its human owner.
+2. **Deterministic Spending Limits:** Owners define strict spending policies (per-transaction maximums, periodic allowances, and target contract allowlists).
+3. **Provable Attribution:** Every action taken by an agent is signed, validated against the owner's policy, and attributed to that specific agent identity.
 
-## Architecture overview
+---
 
-_Placeholder for an architecture diagram._
+## How It Uses Monad
 
-- `contracts/` — Foundry project for the on-chain identity and spending-limit contracts (not implemented yet).
-- `web/` — Next.js dashboard for creating agents and managing limits (not implemented yet).
-- `agent/` — Agent runtime script that signs and submits transactions within its limits (not implemented yet).
-- `docs/` — Additional documentation.
+AgentPass is purpose-built to take advantage of Monad's high-performance architecture:
+- **Sub-Second Settlement:** Monad's 1-second block times and high throughput enable agents to execute micro-transactions without waiting on lengthy confirmations.
+- **Low-Cost Policy Checks:** Complex on-chain limit validations and multi-call spending checks remain economically viable at scale due to Monad's low gas fees.
+- **Parallelized Agent Activity:** Multiple agents operating under the same owner can transact concurrently without bottlenecking on sequential account nonces.
+- **Full EVM Compatibility:** The contracts utilize standard Solidity (0.8.28, Prague EVM) compiled via Foundry, allowing seamless integration with viem, cast, and standard Ethereum tooling.
 
-## Tech stack
+---
 
-- Foundry (Solidity)
-- Next.js + TypeScript + Tailwind CSS + shadcn/ui
-- viem
-- Agent script (TypeScript or Python)
-- Quicknode RPC
-- Tenderly
+## Architecture Overview
 
-## Deployed contract addresses
+```
++-------------------------------------------------------------+
+|                        Human Owner                          |
+|             (Configures limits, deposits collateral)        |
++------------------------------+------------------------------+
+                               |
+                               v
++-------------------------------------------------------------+
+|                      AgentPass Web UI                       |
+|               (Next.js Dashboard & Analytics)               |
++------------------------------+------------------------------+
+                               |
+            +------------------+------------------+
+            |                                     |
+            v                                     v
++-----------------------+             +-----------------------+
+|     AI Agent #1       |             |     AI Agent #2       |
+| (Trading / Swaps)     |             | (Data / Payments)     |
++-----------+-----------+             +-----------+-----------+
+            |                                     |
+            +------------------+------------------+
+                               |
+                               v (Constrained Transactions)
++-------------------------------------------------------------+
+|                  AgentPass Smart Contracts                  |
+|  - AgentRegistry: Identity registration & owner mapping     |
+|  - PolicyManager: Per-tx & daily spending limit rules       |
+|  - AgentWallet: Smart account executing bounded actions     |
++------------------------------+------------------------------+
+                               |
+                               v
++-------------------------------------------------------------+
+|                   Monad Testnet (10143)                     |
+|           (Fast execution, instant finality)                |
++-------------------------------------------------------------+
+```
 
-| Contract | Monad testnet address |
-| --- | --- |
-| HelloMonad (Verification pipeline) | `0x03ac420bfc16bec578396e7de13792a5c806df50` |
+### Workspace Structure
 
-## Setup and run instructions
+- `contracts/` — Foundry project with smart contracts, unit/fuzz tests, and deployment scripts.
+- `web/` — Next.js dashboard for agent provisioning, policy configuration, and live activity tracking (Phase 6).
+- `agent/` — Autonomous agent runtime scripts and LangChain/LLM integrations (Phase 6).
+- `scripts/` — Automated bash utilities for RPC health checks, wallet validation, and contract deployment.
+- `docs/` — Architecture notes, deployment logs, and RPC provider guides.
 
-### Environment setup
+---
+
+## Tech Stack
+
+- **Smart Contracts:** Solidity 0.8.28, Foundry 1.8.4, forge-std
+- **Target Network:** Monad Testnet (Chain ID `10143`, Prague EVM)
+- **Frontend / Dashboard:** Next.js, React, TypeScript, Tailwind CSS, shadcn/ui, viem
+- **Agent Runtime:** TypeScript / Python, LangChain, OpenAI / Anthropic APIs
+- **RPC & Infrastructure:** QuickNode RPC, BlockVision / Sourcify contract verifier
+
+---
+
+## Deployed Contract Addresses
+
+| Contract | Network | Address | Explorer Link | Status |
+| --- | --- | --- | --- | --- |
+| HelloMonad (Pipeline Check) | Monad Testnet (`10143`) | `0xbf378950e0e21426ce7d1710303c73a24c1c854d` | [Monadscan](https://testnet.monadscan.com/address/0xbf378950e0e21426ce7d1710303c73a24c1c854d) | Active |
+| AgentRegistry | Monad Testnet (`10143`) | _To be deployed in Phase 5_ | — | Planned |
+| SpendingPolicyManager | Monad Testnet (`10143`) | _To be deployed in Phase 5_ | — | Planned |
+| AgentWalletFactory | Monad Testnet (`10143`) | _To be deployed in Phase 6_ | — | Planned |
+
+---
+
+## Setup and Run Instructions
+
+### 1. Prerequisites
+
+- **OS:** Linux or WSL2 (Ubuntu 22.04+ recommended)
+- **Foundry:** 1.8.4+ (`forge`, `cast`)
+- **Node.js:** 18.x or 20.x
+- **Python:** 3.10+ (for optional agent runtime)
+
+### 2. Environment Setup
 
 1. Copy `.env.example` to `.env`:
    ```bash
    cp .env.example .env
    ```
-2. Fill in the required environment variables in `.env` (such as `QUICKNODE_RPC_URL`). Never commit `.env` or real secrets.
-3. Validate RPC connectivity and health:
+2. Populate the required environment variables:
+   - `QUICKNODE_RPC_URL`: Your Monad testnet RPC endpoint.
+   - `DEPLOYER_PRIVATE_KEY`: Private key for a testnet-only deployer account.
+   - `EXPECTED_CHAIN_ID`: Set to `10143`.
+3. Validate RPC connectivity and latency:
    ```bash
    ./scripts/check-rpc.sh
    ```
+4. Verify wallet address derivation and funding:
+   ```bash
+   ./scripts/check-wallet.sh
+   ```
 
-_Placeholder: step-by-step setup for Foundry contracts, the web app, and the agent will be added as each part is built._
+### 3. Smart Contracts (Foundry)
 
-## Demo video
+1. Compile contracts:
+   ```bash
+   cd contracts && forge build
+   ```
+2. Run test suite (unit and fuzz tests):
+   ```bash
+   forge test -vv
+   ```
+3. Generate gas consumption report:
+   ```bash
+   forge test --gas-report
+   ```
+4. Deploy pipeline verification contract:
+   ```bash
+   cd .. && ./scripts/deploy-hello.sh
+   ```
 
-_Placeholder: link to the demo video will be added before the deadline._
+### 4. Web Dashboard (Upcoming)
 
-## AI tools used
+```bash
+cd web
+npm install
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) to view the agent management interface.
 
-AI coding assistants (e.g. Command Code) were used to scaffold this repository, draft documentation, and generate code. All AI-generated code is reviewed by the builder before being committed.
+### 5. AI Agent Runtime (Upcoming)
 
-## External libraries and attribution
+```bash
+cd agent
+npm install # or pip install -r requirements.txt
+npm run start
+```
 
-_Placeholder: external libraries and their licenses will be listed here as they are added._
+---
+
+## Roadmap
+
+- [x] **Phase 1:** Project scaffold, licensing, and `.env.example` baseline.
+- [x] **Phase 2:** Automated RPC health check (`scripts/check-rpc.sh`) with latency measurement.
+- [x] **Phase 3:** Foundry environment setup and funded deployer wallet validation (`scripts/check-wallet.sh`).
+- [x] **Phase 4:** Pipeline contract deployment (`HelloMonad`) on Monad testnet with on-chain verification.
+- [ ] **Phase 5:** Core `AgentRegistry` and `SpendingPolicyManager` contracts with fuzz-tested limit checks.
+- [ ] **Phase 6:** Agent wallet smart account implementation and autonomous agent execution script.
+- [ ] **Phase 7:** Next.js dashboard UI for owner configuration and live agent audit feed.
+- [ ] **Phase 8:** End-to-end hackathon demo video and final submission.
+
+---
+
+## Demo Video
+
+_The video walk-through demonstrating agent limit enforcement on Monad testnet will be added here ahead of the hackathon deadline._
+
+---
+
+## AI Tools Used
+
+AI coding assistants (Command Code, Google Antigravity) were utilized for repository scaffolding, test design, documentation generation, and rapid prototyping. All architecture decisions, security boundaries, and committed code are reviewed and verified by the builder.
+
+---
+
+## External Libraries and Attribution
+
+- [Foundry](https://github.com/foundry-rs/foundry) — Fast portable Solidity toolkit (Apache-2.0 / MIT).
+- [forge-std](https://github.com/foundry-rs/forge-std) — Testing and scripting primitives for Foundry (MIT).
+- [OpenZeppelin Contracts](https://github.com/OpenZeppelin/openzeppelin-contracts) — Battle-tested smart contract libraries (MIT).
+- [viem](https://viem.sh/) — TypeScript interface for Ethereum and EVM chains (MIT).
+
+---
 
 ## License
 
