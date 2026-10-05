@@ -46,6 +46,18 @@ _Placeholder for an architecture diagram._
 
 ## Setup and run instructions
 
+### Environment setup
+
+1. Copy `.env.example` to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+2. Fill in the required environment variables in `.env` (such as `QUICKNODE_RPC_URL`). Never commit `.env` or real secrets.
+3. Validate RPC connectivity and health:
+   ```bash
+   ./scripts/check-rpc.sh
+   ```
+
 _Placeholder: step-by-step setup for Foundry contracts, the web app, and the agent will be added as each part is built._
 
 ## Demo video
