@@ -15,6 +15,7 @@ build/
 # Foundry
 cache/
 broadcast/
+contracts/broadcast
 
 # Python
 __pycache__/
