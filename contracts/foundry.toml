@@ -4,9 +4,9 @@ out = "out"
 libs = ["lib"]
 solc = "0.8.28"
 
-# Monad EVM version: must be verified against official Monad documentation
-# (Configured as prague; verify compatibility with current Monad testnet release)
-evm_version = "prague"
+# Foundry 1.8.4 natively supports `network = "monad"`, which configures EVM compatibility
+# and defaults evm_version to "prague" without requiring manual overrides.
+network = "monad"
 
 optimizer = true
 optimizer_runs = 200

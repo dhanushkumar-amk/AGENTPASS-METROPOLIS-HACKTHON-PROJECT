@@ -91,11 +91,14 @@ AgentPass is purpose-built to take advantage of Monad's high-performance archite
 
 ## Tech Stack
 
-- **Smart Contracts:** Solidity 0.8.28, Foundry 1.8.4, forge-std
-- **Target Network:** Monad Testnet (Chain ID `10143`, Prague EVM)
-- **Frontend / Dashboard:** Next.js, React, TypeScript, Tailwind CSS, shadcn/ui, viem
-- **Agent Runtime:** TypeScript / Python, LangChain, OpenAI / Anthropic APIs
-- **RPC & Infrastructure:** QuickNode RPC, BlockVision / Sourcify contract verifier
+- **Smart Contracts:** Solidity 0.8.28, Foundry 1.8.4 (`network = "monad"`, Prague EVM), forge-std
+- **Target Network:** Monad Testnet (Chain ID `10143`)
+- **Cryptographic Verification:** Native P-256 (secp256r1) precompile at `0x0000000000000000000000000000000000000100` (EIP-7951 / RIP-7212 verified on-chain, ~7.3k gas for passkey authentication)
+- **Account Model:** Direct Vault with Passkey Owner & EIP-712 Meta-Transaction Relayer (bypassing external ERC-4337 bundlers for lower latency and self-sovereign execution)
+- **Agent Identity Layer:** ERC-8004 Tokenized Identity Registry (`0x8004A818BFB912233c491871b3d84c89A494BD9e` verified on Monad Testnet)
+- **Frontend / Dashboard:** Next.js, React, TypeScript, Tailwind CSS, shadcn/ui, viem (Planned - Phase 6)
+- **Agent Runtime:** TypeScript / Python, LangChain, OpenAI / Anthropic APIs (Planned - Phase 6)
+- **RPC & Infrastructure:** QuickNode Monad Testnet RPC (`QUICKNODE_RPC_URL`), Cast / Forge toolchain
 
 ---
 
