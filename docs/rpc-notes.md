@@ -41,3 +41,9 @@ AgentPass includes a lightweight RPC health-check script at `scripts/check-rpc.s
   - Returns exit code `1` if `QUICKNODE_RPC_URL` is unset or fails, and `0` when primary RPC is healthy.
 - **Security Guarantee**:
   - The script never logs, prints, or exposes the actual RPC URL.
+
+## Faucet Instructions
+
+To fund testnet accounts with testnet MON:
+- Quicknode faucet for Monad testnet
+- Alchemy faucet for Monad testnet

@@ -52,10 +52,28 @@ _Placeholder for an architecture diagram._
    ```bash
    cp .env.example .env
    ```
-2. Fill in the required environment variables in `.env` (such as `QUICKNODE_RPC_URL`). Never commit `.env` or real secrets.
+2. Fill in the required environment variables in `.env` (such as `QUICKNODE_RPC_URL` and `DEPLOYER_PRIVATE_KEY`). Never commit `.env` or real secrets.
 3. Validate RPC connectivity and health:
    ```bash
    ./scripts/check-rpc.sh
+   ```
+
+### Foundry setup (WSL / Linux)
+
+> **Warning:** Always use a dedicated, **testnet-only wallet** for `DEPLOYER_PRIVATE_KEY`. Never use a mainnet wallet or expose real private keys.
+
+1. Install Foundry (if not already installed):
+   ```bash
+   curl -L https://foundry.paradigm.xyz | bash
+   foundryup
+   ```
+2. Build contracts:
+   ```bash
+   cd contracts && forge build
+   ```
+3. Verify wallet derivation, chain ID (`10143`), and testnet funding:
+   ```bash
+   ./scripts/check-wallet.sh
    ```
 
 _Placeholder: step-by-step setup for Foundry contracts, the web app, and the agent will be added as each part is built._
