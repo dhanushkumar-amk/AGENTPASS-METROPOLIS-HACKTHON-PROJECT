@@ -24,6 +24,7 @@ __pycache__/
 # OS
 .DS_Store
 *.log
+*.png
 
 # Editors / tooling
 .vscode/
