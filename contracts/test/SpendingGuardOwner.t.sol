@@ -729,4 +729,14 @@ contract SpendingGuardOwnerTest is Test {
         assertEq(actualBal, modelBalance);
         assertEq(actualPaused, modelPaused);
     }
+
+    function test_withdraw_revert_unknownAccount() public {
+        bytes32 unknownAccountId = keccak256("unknown_account_withdraw");
+        ISpendingGuard.WebAuthnAuth memory auth = ISpendingGuard.WebAuthnAuth({
+            authenticatorData: hex"", clientDataJSON: "", challengeIndex: 0, typeIndex: 0, r: 0, s: 0
+        });
+
+        vm.expectRevert(abi.encodeWithSelector(ISpendingGuard.AccountNotFound.selector, unknownAccountId));
+        guard.withdraw(unknownAccountId, payable(recipient), 1 ether, auth);
+    }
 }

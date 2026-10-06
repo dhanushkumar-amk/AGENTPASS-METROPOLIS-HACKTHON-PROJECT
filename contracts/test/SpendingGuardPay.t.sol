@@ -31,6 +31,36 @@ contract RevertingRecipient {
     }
 }
 
+contract CEIObserverRecipient {
+    SpendingGuardHarness public guard;
+    bytes32 public accountId;
+    address public agent;
+    uint256 public expectedAccountBalance;
+    uint128 public expectedSpentToday;
+    bool public observedCorrectState;
+
+    constructor(SpendingGuardHarness _guard, bytes32 _accountId, address _agent) {
+        guard = _guard;
+        accountId = _accountId;
+        agent = _agent;
+    }
+
+    function setExpected(uint256 _bal, uint128 _spent) external {
+        expectedAccountBalance = _bal;
+        expectedSpentToday = _spent;
+    }
+
+    receive() external payable {
+        (,, uint256 currentBal,,) = guard.accountOf(accountId);
+        (,, uint128 currentSpent,,) = guard.agentOf(accountId, agent);
+
+        if (currentBal != expectedAccountBalance || currentSpent != expectedSpentToday) {
+            revert("CEI_VIOLATION_STATE_NOT_UPDATED_BEFORE_TRANSFER");
+        }
+        observedCorrectState = true;
+    }
+}
+
 contract SpendingGuardPayTest is Test {
     SpendingGuardHarness internal guard;
 
@@ -652,5 +682,52 @@ contract SpendingGuardPayTest is Test {
         assertEq(bal, expectedBal);
         assertEq(spent, expectedSpent);
         assertEq(guard.remainingToday(accId, ag), expectedRemaining);
+    }
+
+    function test_CEI_stateUpdatedBeforeExternalCall() public {
+        CEIObserverRecipient observer = new CEIObserverRecipient(guard, testAccountId, agent);
+        observer.setExpected(1 ether - 0.02 ether, 0.02 ether);
+
+        vm.prank(agent);
+        guard.pay(testAccountId, payable(address(observer)), 0.02 ether, "");
+
+        assertTrue(observer.observedCorrectState());
+    }
+
+    function test_pay_overloadWithoutCalldata_happyPath() public {
+        uint256 balBefore = recipient.balance;
+        vm.prank(agent);
+        bytes memory res = guard.pay(testAccountId, payable(recipient), 0.01 ether);
+        assertEq(res.length, 0);
+        assertEq(recipient.balance, balBefore + 0.01 ether);
+    }
+
+    function test_tryPay_overloadWithoutCalldata_happyPath() public {
+        uint256 balBefore = recipient.balance;
+        vm.prank(agent);
+        (bool ok, ISpendingGuard.PaymentBlockReason reason) =
+            guard.tryPay(testAccountId, payable(recipient), 0.01 ether);
+        assertTrue(ok);
+        assertEq(uint8(reason), uint8(ISpendingGuard.PaymentBlockReason.NONE));
+        assertEq(recipient.balance, balBefore + 0.01 ether);
+    }
+
+    function test_boundaries_payUint256MaxRevertsDailyLimitExceeded() public {
+        vm.prank(agent);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ISpendingGuard.DailyLimitExceeded.selector, testAccountId, agent, type(uint128).max, uint128(0.05 ether)
+            )
+        );
+        guard.pay(testAccountId, payable(recipient), type(uint256).max, "");
+    }
+
+    function test_tryPay_overloadWithoutCalldata_blockedPath() public {
+        address stranger = address(0x999);
+        vm.prank(stranger);
+        (bool ok, ISpendingGuard.PaymentBlockReason reason) =
+            guard.tryPay(testAccountId, payable(recipient), 0.01 ether);
+        assertFalse(ok);
+        assertEq(uint8(reason), uint8(ISpendingGuard.PaymentBlockReason.AGENT_NOT_ACTIVE));
     }
 }
