@@ -397,7 +397,10 @@ contract SpendingGuardBaseTest is Test {
 
     function testFuzz_createAccountRandomKeys(bytes32 qx, bytes32 qy) public {
         vm.assume(qx != bytes32(0) && qy != bytes32(0));
+<<<<<<< HEAD
         vm.assume(qx != TEST_QX || qy != TEST_QY);
+=======
+>>>>>>> 616745c753f5b3b05226b04a21ac261394738679
         bytes32 expectedId = keccak256(abi.encode(qx, qy));
 
         bytes32 accountId = guard.createAccount(qx, qy);
