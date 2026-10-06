@@ -1,5 +1,7 @@
 # AgentPass
 
+[![CI](https://github.com/dhanushkumar-amk/AGENTPASS-METROPOLIS-HACKTHON-PROJECT/actions/workflows/ci.yml/badge.svg)](https://github.com/dhanushkumar-amk/AGENTPASS-METROPOLIS-HACKTHON-PROJECT/actions/workflows/ci.yml)
+
 A reusable spending-limit and verifiable identity layer for autonomous AI agents on Monad. Built for the Metropolis Hackathon.
 
 **Repo:** https://github.com/dhanushkumar-amk/AGENTPASS-METROPOLIS-HACKTHON-PROJECT
@@ -199,6 +201,38 @@ cd agent
 npm install # or pip install -r requirements.txt
 npm run start
 ```
+
+---
+
+## Testing and Security
+
+AgentPass smart contracts undergo extensive security verification including static analysis, mutation spot-checks, comprehensive invariant testing, and automated CI.
+
+> **Status & Known Limitation:**
+> Production smart contracts under `src/SpendingGuardBase.sol` define an abstract security base. Production WebAuthn P-256 passkey cryptographic verification via Monad's RIP-7212 precompile (`0x0100`) is integrated in Phase 14. Currently, the production contract contains no mock or stub; testing uses `SpendingGuardHarness` located strictly under `test/harness/`.
+
+### Running Tests
+
+```bash
+cd contracts
+
+# 1. Standard test run (117 unit, fuzz & invariant tests)
+forge test -vv
+
+# 2. Deep verification profile (5,000 fuzz runs, 512 invariant runs, depth 100)
+FOUNDRY_PROFILE=deep forge test
+
+# 3. Test coverage analysis (>99% line, >98% branch coverage)
+forge coverage --report summary --no-match-coverage "test|script"
+
+# 4. Static analysis with Slither
+slither . --filter-paths "lib|test|script"
+```
+
+### Security Reports & Test Traceability
+
+- **[Security Review & Slither Triage](docs/security.md):** Complete checklist review (reentrancy, CEI, replay protection, multi-account isolation), Slither detector triage, contract bytecode sizes (11.8 KB / 48% of EIP-170 limit), and mutation testing results.
+- **[Test Matrix](docs/test-matrix.md):** Traceability table mapping every test plan requirement (1–43) and threat model item to exact test implementations.
 
 ---
 

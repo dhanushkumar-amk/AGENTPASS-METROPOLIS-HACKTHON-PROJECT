@@ -1,0 +1,45 @@
+'forge clean' running (wd: /home/dhanushkumar/agentpass/contracts)
+'forge config --json' running
+'forge build --build-info --deny never --skip ./test/** ./script/** --force' running (wd: /home/dhanushkumar/agentpass/contracts)
+INFO:Detectors:
+Detector: arbitrary-send-eth
+SpendingGuardBase.withdraw(bytes32,address,uint256,ISpendingGuard.WebAuthnAuth) (src/SpendingGuardBase.sol#315-349) sends eth to arbitrary user
+	Dangerous calls:
+	- (success,None) = recipient.call{value: amount}() (src/SpendingGuardBase.sol#345)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#functions-that-send-ether-to-arbitrary-destinations
+INFO:Detectors:
+Detector: incorrect-equality
+SpendingGuardBase._checkPay(bytes32,address,address,uint256) (src/SpendingGuardBase.sol#599-644) uses a dangerous strict equality:
+	- (ag.dayIndex == today) (src/SpendingGuardBase.sol#633)
+SpendingGuardBase.remainingToday(bytes32,address) (src/SpendingGuardBase.sol#543-556) uses a dangerous strict equality:
+	- (ag.dayIndex == today) (src/SpendingGuardBase.sol#550)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#dangerous-strict-equalities
+INFO:Detectors:
+Detector: timestamp
+SpendingGuardBase.remainingToday(bytes32,address) (src/SpendingGuardBase.sol#543-556) uses timestamp for comparisons
+	Dangerous comparisons:
+	- (ag.dayIndex == today) (src/SpendingGuardBase.sol#550)
+SpendingGuardBase._checkPay(bytes32,address,address,uint256) (src/SpendingGuardBase.sol#599-644) uses timestamp for comparisons
+	Dangerous comparisons:
+	- (ag.dayIndex == today) (src/SpendingGuardBase.sol#633)
+SpendingGuardBase._executePay(bytes32,address,address,uint256,bytes) (src/SpendingGuardBase.sol#653-680) uses timestamp for comparisons
+	Dangerous comparisons:
+	- ag.dayIndex != today (src/SpendingGuardBase.sol#661)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
+INFO:Detectors:
+Detector: low-level-calls
+Low level call in SpendingGuardBase.withdraw(bytes32,address,uint256,ISpendingGuard.WebAuthnAuth) (src/SpendingGuardBase.sol#315-349):
+	- (success,None) = recipient.call{value: amount}() (src/SpendingGuardBase.sol#345)
+Low level call in SpendingGuardBase._executePay(bytes32,address,address,uint256,bytes) (src/SpendingGuardBase.sol#653-680):
+	- (sent,result) = to.call{value: amount}(data) (src/SpendingGuardBase.sol#676)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#low-level-calls
+INFO:Detectors:
+Detector: unimplemented-functions
+SpendingGuardBase (src/SpendingGuardBase.sol#14-692) does not implement functions:
+	- SpendingGuardBase._verifyOwner(bytes32,bytes32,ISpendingGuard.WebAuthnAuth) (src/SpendingGuardBase.sol#691)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#unimplemented-functions
+INFO:Detectors:
+Detector: immutable-states
+HelloMonad.owner (src/HelloMonad.sol#11) should be immutable 
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#state-variables-that-could-be-declared-immutable
+INFO:Slither:. analyzed (5 contracts with 102 detectors), 10 result(s) found
