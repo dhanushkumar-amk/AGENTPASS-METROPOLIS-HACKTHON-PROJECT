@@ -1,0 +1,10 @@
+{
+  "contractName": "SpendingGuard",
+  "address": "0x1985ed0D5D4b0b1Af1F28E5e41C169C1062dB92c",
+  "deployBlock": 68695747,
+  "txHash": "0x82e7f80daa1dbded013a473a985a1331aec66f9b8d0b89157ba6044f6136c34d",
+  "chainId": 10143,
+  "deployerAddress": "0x4142F0Ac890eb4f7C37a8C01e66d7adc01Bb1FFC",
+  "date": "2026-10-06T13:21:18Z",
+  "sourcifyMatch": "exact_match"
+}

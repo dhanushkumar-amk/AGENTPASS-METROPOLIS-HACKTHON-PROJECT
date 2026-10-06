@@ -24,4 +24,4 @@ fuzz = { runs = 5000 }
 invariant = { runs = 512, depth = 100 }
 
 [rpc_endpoints]
-monad_testnet = "${QUICKNODE_RPC_URL:-}"
+monad_testnet = "${QUICKNODE_RPC_URL}"

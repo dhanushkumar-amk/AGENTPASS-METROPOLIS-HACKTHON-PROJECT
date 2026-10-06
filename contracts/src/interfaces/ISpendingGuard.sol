@@ -170,6 +170,9 @@ interface ISpendingGuard {
     /// @notice Thrown when an owner WebAuthn passkey signature fails verification.
     error InvalidSignature();
 
+    /// @notice Thrown when non-empty WebAuthn envelope data is passed in raw P-256 mode.
+    error UnsupportedAuthMode();
+
     /// @notice Thrown when an action digest specifies an invalid replay nonce.
     /// @param expected Expected current nonce.
     /// @param provided Provided nonce in action digest.
