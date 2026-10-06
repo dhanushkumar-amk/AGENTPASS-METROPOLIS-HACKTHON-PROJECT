@@ -6,10 +6,23 @@ This document tracks smart contracts deployed to the Monad Testnet (Chain ID `10
 
 | Contract | Network | Address | Tx hash | Explorer link | Date |
 | --- | --- | --- | --- | --- | --- |
+| SpendingGuard | Monad Testnet | `0x1985ed0D5D4b0b1Af1F28E5e41C169C1062dB92c` | `0x82e7f80daa1dbded013a473a985a1331aec66f9b8d0b89157ba6044f6136c34d` | [Monadscan](https://testnet.monadscan.com/address/0x1985ed0D5D4b0b1Af1F28E5e41C169C1062dB92c) | 2026-10-06 |
 | HelloMonad | Monad Testnet | `0xbf378950e0e21426ce7d1710303c73a24c1c854d` | `0x0a3161f09611056241b0c5bc0cd7a5309377a15a7bd434168833b744a2f39d5b` | [Monadscan](https://testnet.monadscan.com/address/0xbf378950e0e21426ce7d1710303c73a24c1c854d) | 2026-10-05 |
 | HelloMonad (Initial) | Monad Testnet | `0x03ac420bfc16bec578396e7de13792a5c806df50` | `0x69f85ce0d7146daef485cb106dc20d5c83fd80869864eaf8da7a52c0bac2a640` | [Monadscan](https://testnet.monadscan.com/address/0x03ac420bfc16bec578396e7de13792a5c806df50) | 2026-10-05 |
 
-## Verification Command
+## Verification Commands
+
+To verify `SpendingGuard` source code against Monad testnet Sourcify verifier:
+
+```bash
+forge verify-contract \
+  0x1985ed0D5D4b0b1Af1F28E5e41C169C1062dB92c \
+  src/SpendingGuard.sol:SpendingGuard \
+  --chain 10143 \
+  --verifier sourcify
+```
+*Verification status: Verified on Sourcify (`exact_match`, Match ID `55023353`).*
+
 
 To verify `HelloMonad` source code against Monad testnet Sourcify verifier:
 

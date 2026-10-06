@@ -52,36 +52,7 @@ The architecture centers on a single non-custodial smart contract, `SpendingGuar
 - **Agent Execution (`pay` & `tryPay`):** Autonomous AI agents transact directly with `SpendingGuard` from their own EOAs. Transactions are strictly bounded by daily velocity limits (24-hour UTC window) and destination allowlists. `tryPay()` provides non-reverting execution with structured `PaymentBlocked` event telemetry.
 - **Serverless Event Feed:** Client applications and dashboards reconstruct account states and transaction streams directly from on-chain event logs without requiring a centralized database.
 
-```mermaid
-graph TB
-    subgraph ClientSide ["Client Side & Agent Runtimes"]
-        Passkey["Hardware Authenticator / Passkey<br/>(P-256 Secure Enclave)"]
-        WebApp["AgentPass Web Application<br/>(Dashboard & Config UI)"]
-        AgentRuntime["AI Agent Runtime<br/>(LangChain / Script / EOA)"]
-    end
-
-    subgraph TransportLayer ["Transport & Relaying"]
-        RelayerAPI["Relayer Service API<br/>(EIP-712 / WebAuthn Transport)"]
-    end
-
-    subgraph MonadNetwork ["Monad Blockchain (Chain ID 10143)"]
-        SpendingGuard["SpendingGuard Contract<br/>(Single Multi-Account Vault)"]
-        Precompile["P-256 Precompile (0x0100)<br/>(~7.3k Gas Verification)"]
-        TargetContracts["Target Protocols / Services<br/>(Allowed Destinations)"]
-        MonadScan["Monad Explorer / RPC<br/>(Event Logs & Status)"]
-    end
-
-    Passkey -->|"Biometric Auth (r, s)"| WebApp
-    WebApp -->|"Signed Owner Action"| RelayerAPI
-    RelayerAPI -->|"Broadcast Tx (Sponsored Gas)"| SpendingGuard
-    SpendingGuard -->|"Staticcall Verification"| Precompile
-
-    AgentRuntime -->|"Direct Calls (pay / tryPay)"| SpendingGuard
-    SpendingGuard -->|"Execute Bounded Payment"| TargetContracts
-
-    SpendingGuard -.->|"Emit Logs (Account, Agent, Payments)"| MonadScan
-    MonadScan -.->|"Index Event Stream (Client Feed)"| WebApp
-```
+![AgentPass Architecture](img/architecture.png)
 
 ### Workspace Structure
 
