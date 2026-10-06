@@ -151,6 +151,70 @@ abstract contract SpendingGuardBase is ISpendingGuard, ReentrancyGuard {
         emit AgentAdded(accountId, agent, dailyLimit, anyTarget);
     }
 
+    /// @notice Grants or revokes permission for an agent to call a specific target address.
+    /// @dev Requires a valid WebAuthn signature from the account's passkey owner.
+    ///      Follows checks-effects-interactions: verifies owner signature, bumps nonce, then writes state.
+    /// @param accountId Account owning the agent.
+    /// @param agent Address of the agent.
+    /// @param target Target destination address.
+    /// @param allowed True to whitelist target, false to revoke.
+    /// @param auth WebAuthn signature payload verifying owner intent.
+    function setTargetAllowed(
+        bytes32 accountId,
+        address agent,
+        address target,
+        bool allowed,
+        WebAuthnAuth calldata auth
+    ) external {
+        if (_accounts[accountId].qx == bytes32(0)) {
+            revert AccountNotFound(accountId);
+        }
+        if (!_agents[accountId][agent].active) {
+            revert UnauthorizedAgent(accountId, agent);
+        }
+        if (target == address(0)) {
+            revert InvalidTarget();
+        }
+
+        uint64 currentNonce = _accounts[accountId].nonce;
+        bytes memory params = abi.encode(agent, target, allowed);
+        bytes32 digest = actionHash(accountId, currentNonce, this.setTargetAllowed.selector, params);
+
+        _verifyOwner(accountId, digest, auth);
+
+        _accounts[accountId].nonce = currentNonce + 1;
+        _targetAllowlist[accountId][agent][target] = allowed;
+
+        emit TargetAllowedSet(accountId, agent, target, allowed);
+    }
+
+    /// @notice Toggles the anyTarget unrestricted destination permission for an agent.
+    /// @dev Requires a valid WebAuthn signature from the account's passkey owner.
+    ///      Follows checks-effects-interactions: verifies owner signature, bumps nonce, then writes state.
+    /// @param accountId Account owning the agent.
+    /// @param agent Address of the agent.
+    /// @param anyTarget True to permit calling any destination, false to enforce target allowlist.
+    /// @param auth WebAuthn signature payload verifying owner intent.
+    function setAnyTarget(bytes32 accountId, address agent, bool anyTarget, WebAuthnAuth calldata auth) external {
+        if (_accounts[accountId].qx == bytes32(0)) {
+            revert AccountNotFound(accountId);
+        }
+        if (!_agents[accountId][agent].active) {
+            revert UnauthorizedAgent(accountId, agent);
+        }
+
+        uint64 currentNonce = _accounts[accountId].nonce;
+        bytes memory params = abi.encode(agent, anyTarget);
+        bytes32 digest = actionHash(accountId, currentNonce, this.setAnyTarget.selector, params);
+
+        _verifyOwner(accountId, digest, auth);
+
+        _accounts[accountId].nonce = currentNonce + 1;
+        _agents[accountId][agent].anyTarget = anyTarget;
+
+        emit AnyTargetSet(accountId, agent, anyTarget);
+    }
+
     /// @dev Internal helper to revert with the custom error matching the block reason.
     /// @param accountId Account funding the payment.
     /// @param agent Calling agent address.
@@ -358,13 +422,12 @@ abstract contract SpendingGuardBase is ISpendingGuard, ReentrancyGuard {
         return limit - effectiveSpent;
     }
 
-    /// @notice Checks if a target destination is approved for an agent.
-    /// @dev address(0) is always disallowed. Returns true if agent has anyTarget or target is allowlisted.
-    /// @param accountId Account identifier.
-    /// @param agent Address of the agent.
-    /// @param target Destination address to evaluate.
-    /// @return allowed True if calls to target are permitted.
-    function isTargetAllowed(bytes32 accountId, address agent, address target) public view returns (bool allowed) {
+    /// @dev Shared internal logic for determining if a target destination is permitted.
+    /// @param accountId Account funding the payment.
+    /// @param agent Address of the calling agent.
+    /// @param target Destination address.
+    /// @return allowed True if the target is permitted, false otherwise.
+    function _isTargetAllowed(bytes32 accountId, address agent, address target) internal view returns (bool allowed) {
         if (target == address(0)) {
             return false;
         }
@@ -373,6 +436,21 @@ abstract contract SpendingGuardBase is ISpendingGuard, ReentrancyGuard {
             return false;
         }
         return ag.anyTarget || _targetAllowlist[accountId][agent][target];
+    }
+
+    /// @notice Checks if a target destination is approved for an agent.
+    /// @dev address(0) is always disallowed. Returns true if agent has anyTarget or target is allowlisted.
+    /// @param accountId Account identifier.
+    /// @param agent Address of the agent.
+    /// @param target Destination address to evaluate.
+    /// @return allowed True if calls to target are permitted.
+    function isTargetAllowed(bytes32 accountId, address agent, address target)
+        external
+        view
+        override
+        returns (bool allowed)
+    {
+        return _isTargetAllowed(accountId, agent, target);
     }
 
     // ==========================================
@@ -406,11 +484,7 @@ abstract contract SpendingGuardBase is ISpendingGuard, ReentrancyGuard {
         }
 
         // 4. target not allowed -> TARGET_NOT_ALLOWED
-        // to == address(0) is ALWAYS not allowed, even with anyTarget.
-        if (to == address(0)) {
-            return PaymentBlockReason.TARGET_NOT_ALLOWED;
-        }
-        if (!_agents[accountId][agent].anyTarget && !_targetAllowlist[accountId][agent][to]) {
+        if (!_isTargetAllowed(accountId, agent, to)) {
             return PaymentBlockReason.TARGET_NOT_ALLOWED;
         }
 

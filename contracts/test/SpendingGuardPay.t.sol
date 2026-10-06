@@ -124,8 +124,15 @@ contract SpendingGuardPayTest is Test {
         assertTrue(guard.isTargetAllowed(testAccountId, agent, recipient));
         // otherAccountId has anyTarget = false and recipient is not allowlisted
         assertFalse(guard.isTargetAllowed(otherAccountId, otherAgent, recipient));
-        // test with harness setter
-        guard.setTargetAllowedForTest(otherAccountId, otherAgent, recipient, true);
+        // test with real signed owner action
+        bytes memory params = abi.encode(otherAgent, recipient, true);
+        guard.setTargetAllowed(
+            otherAccountId,
+            otherAgent,
+            recipient,
+            true,
+            guard.signActionForTest(otherAccountId, guard.setTargetAllowed.selector, params)
+        );
         assertTrue(guard.isTargetAllowed(otherAccountId, otherAgent, recipient));
     }
 

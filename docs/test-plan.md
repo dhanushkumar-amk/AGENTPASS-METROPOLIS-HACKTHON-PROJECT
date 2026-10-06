@@ -83,6 +83,11 @@ This test plan defines the comprehensive Foundry test matrix for `SpendingGuard`
     - Asserts `isTargetAllowed(accountId, agent, 0xTarget)` returns `true`.
     - Asserts emission of `TargetAllowedSet(accountId, agent, 0xTarget, true)`.
 
+17. **`test_17_setAnyTarget_toggle`**  
+    - Owner toggles `setAnyTarget(accountId, agent, true)`.
+    - Asserts `AnyTargetSet(accountId, agent, true)` emitted and `isTargetAllowed` returns `true` for all non-zero targets.
+    - Owner toggles back to `false`; unlisted targets blocked again.
+
 17. **`test_17_revokeAgent_happyPath`**  
     - Owner calls `revokeAgent(accountId, agent)`.
     - Asserts `agentOf(accountId, agent).active` becomes `false`.

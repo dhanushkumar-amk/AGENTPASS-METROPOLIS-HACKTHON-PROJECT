@@ -83,6 +83,14 @@ export class AgentPassClient {
   async remainingToday(agentAddress?: Address): Promise<bigint>;
 
   /**
+   * Checks whether a destination target address is permitted for an agent.
+   * Returns false for address(0) or inactive agents; returns true if anyTarget is enabled or target is allowlisted.
+   * @param target Destination address to query.
+   * @param agentAddress Optional agent address override (defaults to client key).
+   */
+  async isTargetAllowed(target: Address, agentAddress?: Address): Promise<boolean>;
+
+  /**
    * Translates a numeric PaymentBlockReason enum into clear, actionable plain English.
    * @param reason The reason code returned by tryPay or PaymentBlocked event.
    */

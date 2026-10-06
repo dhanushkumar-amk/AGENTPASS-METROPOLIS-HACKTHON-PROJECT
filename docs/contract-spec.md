@@ -15,7 +15,7 @@
 | Agent Registration (`addAgent`) | Phase 7 | Done | Owner-authorized agent creation with nonce bumping and digest binding |
 | Read Views (`accountOf`, `agentOf`, `nonceOf`, `actionHash`) | Phase 7 | Done | Core state inspection and EIP-712 typed action hashing |
 | Spending Velocity & Payments (`pay`, `tryPay`) | Phase 8 | Done | Daily velocity cap enforcement, non-reverting tryPay, and day rollover |
-| Destination Target Allowlist (`setTargetAllowed`, `isTargetAllowed`) | Phase 9 | Planned | Per-agent target contract whitelist permissions |
+| Destination Target Allowlist (`setTargetAllowed`, `setAnyTarget`, `isTargetAllowed`) | Phase 9 | Done | Per-agent target allowlist permissions, anyTarget toggle, and shared validation |
 | Account Lifecycle & Safety (`withdraw`, `setPaused`, `revokeAgent`) | Phase 10 | Planned | Owner withdrawals, emergency freezing, and agent revocation |
 | Native WebAuthn P-256 Precompile (`_verifyOwner`) | Phase 14 | Planned | On-chain signature verification via Monad precompile at `0x0100` |
 
@@ -92,7 +92,7 @@ The contract maintains three core mappings:
 
 ## Digest Format for Owner Actions
 
-All owner actions (`addAgent`, `setDailyLimit`, `setTargetAllowed`, `revokeAgent`, `setPaused`, `withdraw`) require a WebAuthn passkey signature. The signed digest is constructed using EIP-712 structured data hashing to ensure strict domain separation and replay protection.
+All owner actions (`addAgent`, `setDailyLimit`, `setTargetAllowed`, `setAnyTarget`, `revokeAgent`, `setPaused`, `withdraw`) require a WebAuthn passkey signature. The signed digest is constructed using EIP-712 structured data hashing to ensure strict domain separation and replay protection.
 
 ### Domain Separator
 ```
@@ -229,16 +229,40 @@ function setTargetAllowed(
 ) external;
 ```
 - **Inputs:** `accountId`, `agent`, `target`, `allowed`, `auth`.
-- **Caller:** Anyone (relayer with valid owner signature).
+- **Caller:** Anyone (relayer with valid owner passkey signature).
 - **Checks:**
-  - Account exists; agent exists; `target != address(0)`.
-  - Validates owner signature and increments nonce.
+  - Account exists (`AccountNotFound`).
+  - Agent is active for account (`UnauthorizedAgent`).
+  - Destination target is non-zero (`InvalidTarget` if `target == address(0)`).
+  - Validates EIP-712 owner signature over `(agent, target, allowed)` digest and increments nonce.
 - **State Changes:**
   - `_targetAllowlist[accountId][agent][target] = allowed`.
+- **Idempotence:** Setting the same value again does NOT revert; verifies signature, bumps nonce, and emits event.
 - **Events:** `TargetAllowedSet(accountId, agent, target, allowed)`.
-- **Errors:** `AccountNotFound`, `AccountPaused`, `UnauthorizedAgent`, `InvalidNonce`, `InvalidSignature`.
+- **Errors:** `AccountNotFound`, `UnauthorizedAgent`, `InvalidTarget`, `InvalidNonce`, `InvalidSignature`.
 
-### 6. `revokeAgent`
+### 6. `setAnyTarget`
+```solidity
+function setAnyTarget(
+    bytes32 accountId,
+    address agent,
+    bool anyTarget,
+    WebAuthnAuth calldata auth
+) external;
+```
+- **Inputs:** `accountId`, `agent`, `anyTarget`, `auth`.
+- **Caller:** Anyone (relayer with valid owner passkey signature).
+- **Checks:**
+  - Account exists (`AccountNotFound`).
+  - Agent is active for account (`UnauthorizedAgent`).
+  - Validates EIP-712 owner signature over `(agent, anyTarget)` digest and increments nonce.
+- **State Changes:**
+  - `_agents[accountId][agent].anyTarget = anyTarget`.
+- **Idempotence:** Setting the same value again does NOT revert; verifies signature, bumps nonce, and emits event.
+- **Events:** `AnyTargetSet(accountId, agent, anyTarget)`.
+- **Errors:** `AccountNotFound`, `UnauthorizedAgent`, `InvalidNonce`, `InvalidSignature`.
+
+### 7. `revokeAgent`
 ```solidity
 function revokeAgent(
     bytes32 accountId,
@@ -379,7 +403,7 @@ The 24-hour spending window is calculated on-demand (lazy evaluation):
 - `accountOf(bytes32 accountId)`: Returns `(bytes32 qx, bytes32 qy, uint256 balance, uint64 nonce, bool paused)`.
 - `agentOf(bytes32 accountId, address agent)`: Returns `(bool active, uint128 dailyLimit, uint128 spentToday, uint64 dayIndex, bool anyTarget)`.
 - `remainingToday(bytes32 accountId, address agent)`: Returns available spending capacity in wei, accounting for 24h rollover dynamically.
-- `isTargetAllowed(bytes32 accountId, address agent, address target)`: Returns bool permission.
+- `isTargetAllowed(bytes32 accountId, address agent, address target)`: Returns false for address(0) or inactive agent; otherwise returns agent.anyTarget || allowlist entry. Identical shared validation logic as pay and tryPay.
 - `nonceOf(bytes32 accountId)`: Returns current owner nonce.
 - `actionHash(bytes32 accountId, uint64 nonce, bytes4 actionSelector, bytes memory params)`: Returns 32-byte typed digest.
 

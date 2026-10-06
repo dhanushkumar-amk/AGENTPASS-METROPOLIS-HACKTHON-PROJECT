@@ -101,6 +101,12 @@ interface ISpendingGuard {
     /// @param allowed True if calls to target are permitted, false otherwise.
     event TargetAllowedSet(bytes32 indexed accountId, address indexed agent, address indexed target, bool allowed);
 
+    /// @notice Emitted when an agent's anyTarget permission flag is updated.
+    /// @param accountId Account owning the agent.
+    /// @param agent Address of the agent.
+    /// @param anyTarget True if unrestricted targeting is enabled, false if restricted to allowlist.
+    event AnyTargetSet(bytes32 indexed accountId, address indexed agent, bool anyTarget);
+
     /// @notice Emitted when an agent is revoked.
     /// @param accountId Account owning the agent.
     /// @param agent Address of the revoked agent.
@@ -173,6 +179,9 @@ interface ISpendingGuard {
     /// @param target Disallowed destination address.
     error TargetNotAllowed(bytes32 accountId, address agent, address target);
 
+    /// @notice Thrown when a target destination address is invalid (e.g. address(0)).
+    error InvalidTarget();
+
     /// @notice Thrown when a payment exceeds the remaining daily spending velocity cap.
     /// @param accountId Account identifier.
     /// @param agent Calling agent address.
@@ -243,6 +252,14 @@ interface ISpendingGuard {
         bool allowed,
         WebAuthnAuth calldata auth
     ) external;
+
+    /// @notice Toggles the anyTarget unrestricted destination permission for an agent.
+    /// @dev Requires a valid WebAuthn signature from the account's passkey owner.
+    /// @param accountId Account owning the agent.
+    /// @param agent Address of the agent.
+    /// @param anyTarget True to permit calling any destination, false to enforce target allowlist.
+    /// @param auth WebAuthn signature payload verifying owner intent.
+    function setAnyTarget(bytes32 accountId, address agent, bool anyTarget, WebAuthnAuth calldata auth) external;
 
     /// @notice Revokes an agent's authorization immediately.
     /// @dev Requires a valid WebAuthn signature from the account's passkey owner.

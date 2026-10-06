@@ -33,8 +33,16 @@ contract SpendingGuardHarness is SpendingGuardBase {
         _agents[accountId][agent].dailyLimit = newDailyLimit;
     }
 
-    function setTargetAllowedForTest(bytes32 accountId, address agent, address target, bool allowed) external {
-        _targetAllowlist[accountId][agent][target] = allowed;
+    function signActionForTest(bytes32 accountId, bytes4 selector, bytes memory params)
+        external
+        view
+        returns (WebAuthnAuth memory)
+    {
+        uint64 nonce = _accounts[accountId].nonce;
+        bytes32 digest = actionHash(accountId, nonce, selector, params);
+        return WebAuthnAuth({
+            authenticatorData: hex"", clientDataJSON: "", challengeIndex: 0, typeIndex: 0, r: uint256(digest), s: 1
+        });
     }
 
     function createFundedAccountWithAgent(
@@ -63,15 +71,11 @@ contract SpendingGuardHarness is SpendingGuardBase {
     }
 
     // ========================================================================
-    // OUT-OF-SCOPE INTERFACE STUBS (Deferred to Phases 9 & 10)
+    // OUT-OF-SCOPE INTERFACE STUBS (Deferred to Phase 10)
     // ========================================================================
 
     function setDailyLimit(bytes32, address, uint128, WebAuthnAuth calldata) external pure override {
-        revert("Phase 9");
-    }
-
-    function setTargetAllowed(bytes32, address, address, bool, WebAuthnAuth calldata) external pure override {
-        revert("Phase 9");
+        revert("Phase 10");
     }
 
     function revokeAgent(bytes32, address, WebAuthnAuth calldata) external pure override {
