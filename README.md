@@ -111,10 +111,10 @@ The protocol smart contracts are located in `contracts/src/`:
 | Contract | Role | Status | Description |
 | --- | --- | --- | --- |
 | `ISpendingGuard` | Interface | Specified | Interface defining data structures, events, custom errors, and method signatures |
-| `SpendingGuardBase` | Core Logic | Work-in-Progress (Phase 7) | Abstract base contract implementing storage packing, account creation, deposits, agent registration, views, nonces, and EIP-712 action digests |
+| `SpendingGuardBase` | Core Logic | Work-in-Progress (Phase 8 Done) | Abstract base contract implementing accounts, deposits, agent registration, nonces, `pay`, non-reverting `tryPay`, daily spending limit velocity, rollover, and views |
 | `HelloMonad` | Pipeline Check | Deployed | Initial pipeline verification contract on Monad Testnet |
 
-*Note: `SpendingGuardBase` currently implements the Phase 7 core baseline. Out-of-scope logic (`pay`/`tryPay`/limits in Phase 8, allowlists in Phase 9, lifecycle in Phase 10, native P-256 precompile verification in Phase 14) is cleanly stubbed in test harness.*
+*Note: `SpendingGuardBase` implements Phases 7 and 8 (accounts, deposits, agents, views, digests, `pay`, `tryPay`, daily limit window, rollover, and solvency invariants). Future scope logic (allowlist mutations in Phase 9, owner lifecycle/freeze in Phase 10, native P-256 precompile verification in Phase 14) remains safely deferred.*
 
 ---
 

@@ -22,24 +22,52 @@ contract SpendingGuardHarness is SpendingGuardBase {
     }
 
     // ========================================================================
-    // OUT-OF-SCOPE INTERFACE STUBS (Deferred to Phases 8 to 10)
+    // TEST-ONLY STATE SETTERS & HELPERS (NEVER IN PRODUCTION)
     // ========================================================================
 
-    function pay(bytes32, address payable, uint256, bytes calldata) external pure override returns (bytes memory) {
-        revert("Phase 8");
+    function setPausedForTest(bytes32 accountId, bool paused) external {
+        _accounts[accountId].paused = paused;
     }
 
-    function tryPay(bytes32, address payable, uint256, bytes calldata)
-        external
-        pure
-        override
-        returns (bool, PaymentBlockReason, bytes memory)
-    {
-        revert("Phase 8");
+    function setDailyLimitForTest(bytes32 accountId, address agent, uint128 newDailyLimit) external {
+        _agents[accountId][agent].dailyLimit = newDailyLimit;
     }
+
+    function setTargetAllowedForTest(bytes32 accountId, address agent, address target, bool allowed) external {
+        _targetAllowlist[accountId][agent][target] = allowed;
+    }
+
+    function createFundedAccountWithAgent(
+        bytes32 qx,
+        bytes32 qy,
+        uint128 initialDeposit,
+        address agent,
+        uint128 dailyLimit,
+        bool anyTarget
+    ) external payable returns (bytes32 accountId) {
+        accountId = this.createAccount(qx, qy);
+        uint128 dep = msg.value > 0 ? uint128(msg.value) : initialDeposit;
+        if (dep > 0) {
+            _accounts[accountId].balance += dep;
+            emit Deposited(accountId, msg.sender, dep);
+        }
+        _accounts[accountId].nonce++;
+        _agents[accountId][agent] = AgentStorage({
+            dailyLimit: dailyLimit,
+            spentToday: 0,
+            dayIndex: uint64(block.timestamp / 1 days),
+            active: true,
+            anyTarget: anyTarget
+        });
+        emit AgentAdded(accountId, agent, dailyLimit, anyTarget);
+    }
+
+    // ========================================================================
+    // OUT-OF-SCOPE INTERFACE STUBS (Deferred to Phases 9 & 10)
+    // ========================================================================
 
     function setDailyLimit(bytes32, address, uint128, WebAuthnAuth calldata) external pure override {
-        revert("Phase 8");
+        revert("Phase 9");
     }
 
     function setTargetAllowed(bytes32, address, address, bool, WebAuthnAuth calldata) external pure override {

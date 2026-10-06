@@ -192,8 +192,7 @@ interface ISpendingGuard {
     /// @notice Thrown when native MON transfer to recipient/target reverts.
     error PaymentTransferFailed();
 
-    /// @notice Thrown when a reentrancy attack is detected.
-    error ReentrancyGuardReentrantCall();
+    // Note: ReentrancyGuardReentrantCall is inherited from OpenZeppelin's ReentrancyGuard contract.
 
     // ==========================================
     // STATE MODIFYING FUNCTIONS

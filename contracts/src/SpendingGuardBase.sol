@@ -2,16 +2,16 @@
 pragma solidity 0.8.28;
 
 import {ISpendingGuard} from "./interfaces/ISpendingGuard.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title SpendingGuardBase
  * @notice Abstract base implementation of the AgentPass SpendingGuard protocol on Monad.
  * @dev Enforces account registration, deposit accounting, agent policy initialization,
- *      EIP-712 typed owner-action hashing, and replay protection nonces.
- *      Out-of-scope payment logic (pay/tryPay/daily limits/allowlists) is deferred to subsequent phases.
+ *      EIP-712 typed owner-action hashing, replay protection nonces, daily velocity limits,
+ *      and non-reverting tryPay telemetry.
  */
-// forge-lint: disable-next-line(locked-ether)
-abstract contract SpendingGuardBase is ISpendingGuard {
+abstract contract SpendingGuardBase is ISpendingGuard, ReentrancyGuard {
     // ==========================================
     // STORAGE STRUCTS & PACKING
     // ==========================================
@@ -46,6 +46,9 @@ abstract contract SpendingGuardBase is ISpendingGuard {
 
     /// @dev Mapping from accountId => agent address => AgentStorage policy.
     mapping(bytes32 => mapping(address => AgentStorage)) internal _agents;
+
+    /// @dev Mapping from accountId => agent address => target address => permission flag.
+    mapping(bytes32 => mapping(address => mapping(address => bool))) internal _targetAllowlist;
 
     // ==========================================
     // EIP-712 CONSTANTS
@@ -148,6 +151,121 @@ abstract contract SpendingGuardBase is ISpendingGuard {
         emit AgentAdded(accountId, agent, dailyLimit, anyTarget);
     }
 
+    /// @dev Internal helper to revert with the custom error matching the block reason.
+    /// @param accountId Account funding the payment.
+    /// @param agent Calling agent address.
+    /// @param target Destination recipient address.
+    /// @param amount Payment amount in wei.
+    /// @param reason Failing block reason.
+    function _handlePayRevert(
+        bytes32 accountId,
+        address agent,
+        address payable target,
+        uint256 amount,
+        PaymentBlockReason reason
+    ) internal view {
+        if (reason == PaymentBlockReason.ZERO_AMOUNT) {
+            revert ZeroAmount();
+        } else if (reason == PaymentBlockReason.AGENT_NOT_ACTIVE) {
+            revert UnauthorizedAgent(accountId, agent);
+        } else if (reason == PaymentBlockReason.PAUSED) {
+            revert AccountPaused(accountId);
+        } else if (reason == PaymentBlockReason.TARGET_NOT_ALLOWED) {
+            revert TargetNotAllowed(accountId, agent, target);
+        } else if (reason == PaymentBlockReason.OVER_DAILY_LIMIT) {
+            // forge-lint: disable-next-line(unsafe-typecast)
+            uint128 req = amount > type(uint128).max ? type(uint128).max : uint128(amount);
+            // forge-lint: disable-next-line(unsafe-typecast)
+            revert DailyLimitExceeded(accountId, agent, req, uint128(remainingToday(accountId, agent)));
+        } else if (reason == PaymentBlockReason.INSUFFICIENT_VAULT_BALANCE) {
+            revert InsufficientBalance(accountId, amount, uint256(_accounts[accountId].balance));
+        }
+    }
+
+    /// @notice Strict payment execution with calldata. Reverts on any policy violation.
+    /// @dev Only callable by authorized agent (msg.sender). Protected by nonReentrant.
+    /// @param accountId Account funding the payment.
+    /// @param target Destination recipient address.
+    /// @param amount Native MON amount in wei.
+    /// @param data Optional calldata for smart contract call.
+    /// @return result Call returndata.
+    function pay(bytes32 accountId, address payable target, uint256 amount, bytes calldata data)
+        external
+        nonReentrant
+        returns (bytes memory result)
+    {
+        PaymentBlockReason reason = _checkPay(accountId, msg.sender, target, amount);
+        if (reason != PaymentBlockReason.NONE) {
+            _handlePayRevert(accountId, msg.sender, target, amount, reason);
+        }
+
+        return _executePay(accountId, msg.sender, target, amount, data);
+    }
+
+    /// @notice Convenience overload for pay without calldata.
+    /// @param accountId Account funding the payment.
+    /// @param target Destination recipient address.
+    /// @param amount Native MON amount in wei.
+    /// @return result Call returndata.
+    function pay(bytes32 accountId, address payable target, uint256 amount)
+        external
+        nonReentrant
+        returns (bytes memory result)
+    {
+        PaymentBlockReason reason = _checkPay(accountId, msg.sender, target, amount);
+        if (reason != PaymentBlockReason.NONE) {
+            _handlePayRevert(accountId, msg.sender, target, amount, reason);
+        }
+
+        return _executePay(accountId, msg.sender, target, amount, "");
+    }
+
+    /// @notice Non-reverting policy-guarded payment execution with calldata.
+    /// @dev Catches policy violations gracefully, emits PaymentBlocked, and returns (false, reason, "").
+    ///      Reverts only for reentrancy or low-level transfer failure.
+    /// @param accountId Account funding the payment.
+    /// @param target Destination recipient address.
+    /// @param amount Native MON amount in wei.
+    /// @param data Optional calldata for smart contract call.
+    /// @return success True if payment executed, false if blocked by policy.
+    /// @return reason Block reason enum (NONE if successful).
+    /// @return result Call returndata.
+    function tryPay(bytes32 accountId, address payable target, uint256 amount, bytes calldata data)
+        external
+        nonReentrant
+        returns (bool success, PaymentBlockReason reason, bytes memory result)
+    {
+        reason = _checkPay(accountId, msg.sender, target, amount);
+        if (reason != PaymentBlockReason.NONE) {
+            emit PaymentBlocked(accountId, msg.sender, target, amount, reason);
+            return (false, reason, "");
+        }
+
+        result = _executePay(accountId, msg.sender, target, amount, data);
+        return (true, PaymentBlockReason.NONE, result);
+    }
+
+    /// @notice Convenience overload for tryPay without calldata.
+    /// @param accountId Account funding the payment.
+    /// @param target Destination recipient address.
+    /// @param amount Native MON amount in wei.
+    /// @return ok True if payment executed, false if blocked.
+    /// @return reason Block reason code.
+    function tryPay(bytes32 accountId, address payable target, uint256 amount)
+        external
+        nonReentrant
+        returns (bool ok, PaymentBlockReason reason)
+    {
+        reason = _checkPay(accountId, msg.sender, target, amount);
+        if (reason != PaymentBlockReason.NONE) {
+            emit PaymentBlocked(accountId, msg.sender, target, amount, reason);
+            return (false, reason);
+        }
+
+        _executePay(accountId, msg.sender, target, amount, "");
+        return (true, PaymentBlockReason.NONE);
+    }
+
     /// @notice Rejects plain native transfers without function data to prevent stranded funds.
     receive() external payable {
         revert ZeroAmount();
@@ -220,27 +338,138 @@ abstract contract SpendingGuardBase is ISpendingGuard {
         digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
     }
 
-    /// @notice Returns the remaining spending capacity for an agent.
-    /// @dev In Phase 7, returns full dailyLimit. Phase 8 will refine dynamic day rollover
-    ///      and cumulative daily spending deduction.
+    /// @notice Returns the remaining spending capacity for an agent in the current day window.
+    /// @dev Evaluates dynamic 24-hour rollover and floors at 0 to avoid underflow if limit was lowered.
     /// @param accountId Account identifier.
     /// @param agent Address of the agent.
-    /// @return remaining Available daily allowance in wei.
-    function remainingToday(bytes32 accountId, address agent) external view returns (uint256 remaining) {
-        return uint256(_agents[accountId][agent].dailyLimit);
+    /// @return remaining Available daily allowance in wei (0 if agent is inactive).
+    function remainingToday(bytes32 accountId, address agent) public view returns (uint256 remaining) {
+        AgentStorage storage ag = _agents[accountId][agent];
+        if (!ag.active) {
+            return 0;
+        }
+        // forge-lint: disable-next-line(unsafe-typecast)
+        uint64 today = uint64(block.timestamp / 1 days);
+        uint256 effectiveSpent = (ag.dayIndex == today) ? uint256(ag.spentToday) : 0;
+        uint256 limit = uint256(ag.dailyLimit);
+        if (effectiveSpent >= limit) {
+            return 0;
+        }
+        return limit - effectiveSpent;
     }
 
     /// @notice Checks if a target destination is approved for an agent.
-    /// @dev In Phase 7, returns false as target allowlist management is implemented in Phase 9.
+    /// @dev address(0) is always disallowed. Returns true if agent has anyTarget or target is allowlisted.
     /// @param accountId Account identifier.
     /// @param agent Address of the agent.
-    /// @param target Destination address.
-    /// @return allowed False in Phase 7 baseline.
-    function isTargetAllowed(bytes32 accountId, address agent, address target) external pure returns (bool allowed) {
-        accountId;
-        agent;
-        target;
-        return false;
+    /// @param target Destination address to evaluate.
+    /// @return allowed True if calls to target are permitted.
+    function isTargetAllowed(bytes32 accountId, address agent, address target) public view returns (bool allowed) {
+        if (target == address(0)) {
+            return false;
+        }
+        AgentStorage storage ag = _agents[accountId][agent];
+        if (!ag.active) {
+            return false;
+        }
+        return ag.anyTarget || _targetAllowlist[accountId][agent][target];
+    }
+
+    // ==========================================
+    // INTERNAL POLICY & EXECUTION FUNCTIONS
+    // ==========================================
+
+    /// @notice Evaluates policy rules for a payment attempt in strict authoritative check order.
+    /// @param accountId Account funding the payment.
+    /// @param agent Address of calling agent.
+    /// @param to Destination address.
+    /// @param amount Transfer amount in wei.
+    /// @return PaymentBlockReason NONE if allowed, or specific denial reason code.
+    function _checkPay(bytes32 accountId, address agent, address to, uint256 amount)
+        internal
+        view
+        returns (PaymentBlockReason)
+    {
+        // 1. amount == 0 -> ZERO_AMOUNT
+        if (amount == 0) {
+            return PaymentBlockReason.ZERO_AMOUNT;
+        }
+
+        // 2. agent not active for account -> AGENT_NOT_ACTIVE (covers unknown account)
+        if (!_agents[accountId][agent].active) {
+            return PaymentBlockReason.AGENT_NOT_ACTIVE;
+        }
+
+        // 3. account paused -> PAUSED
+        if (_accounts[accountId].paused) {
+            return PaymentBlockReason.PAUSED;
+        }
+
+        // 4. target not allowed -> TARGET_NOT_ALLOWED
+        // to == address(0) is ALWAYS not allowed, even with anyTarget.
+        if (to == address(0)) {
+            return PaymentBlockReason.TARGET_NOT_ALLOWED;
+        }
+        if (!_agents[accountId][agent].anyTarget && !_targetAllowlist[accountId][agent][to]) {
+            return PaymentBlockReason.TARGET_NOT_ALLOWED;
+        }
+
+        // 5. effectiveSpent + amount > dailyLimit -> OVER_DAILY_LIMIT
+        // Safe math in uint256 avoids arithmetic overflow on huge amounts.
+        AgentStorage storage ag = _agents[accountId][agent];
+        uint256 limit = uint256(ag.dailyLimit);
+        if (amount > limit) {
+            return PaymentBlockReason.OVER_DAILY_LIMIT;
+        }
+        // forge-lint: disable-next-line(unsafe-typecast)
+        uint64 today = uint64(block.timestamp / 1 days);
+        uint256 effectiveSpent = (ag.dayIndex == today) ? uint256(ag.spentToday) : 0;
+        if (effectiveSpent + amount > limit) {
+            return PaymentBlockReason.OVER_DAILY_LIMIT;
+        }
+
+        // 6. amount > account balance -> INSUFFICIENT_VAULT_BALANCE
+        if (amount > uint256(_accounts[accountId].balance)) {
+            return PaymentBlockReason.INSUFFICIENT_VAULT_BALANCE;
+        }
+
+        return PaymentBlockReason.NONE;
+    }
+
+    /// @notice Executes state updates and external native MON transfer following CEI.
+    /// @param accountId Account funding the payment.
+    /// @param agent Calling agent address.
+    /// @param to Destination address.
+    /// @param amount Amount of native MON in wei.
+    /// @param data Optional calldata.
+    /// @return result Returndata from destination call.
+    function _executePay(bytes32 accountId, address agent, address payable to, uint256 amount, bytes memory data)
+        internal
+        returns (bytes memory result)
+    {
+        // forge-lint: disable-next-line(unsafe-typecast)
+        uint64 today = uint64(block.timestamp / 1 days);
+        AgentStorage storage ag = _agents[accountId][agent];
+
+        if (ag.dayIndex != today) {
+            ag.dayIndex = today;
+            ag.spentToday = 0;
+        }
+
+        // Effects
+        // forge-lint: disable-next-line(unsafe-typecast)
+        ag.spentToday += uint128(amount);
+        // forge-lint: disable-next-line(unsafe-typecast)
+        _accounts[accountId].balance -= uint128(amount);
+
+        emit PaymentExecuted(accountId, agent, to, amount);
+
+        // Interaction
+        bool sent;
+        (sent, result) = to.call{value: amount}(data);
+        if (!sent) {
+            revert PaymentTransferFailed();
+        }
     }
 
     // ==========================================

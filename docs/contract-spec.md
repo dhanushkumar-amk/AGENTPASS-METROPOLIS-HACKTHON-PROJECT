@@ -14,7 +14,7 @@
 | Vault Deposits (`deposit`, `receive`, `fallback`) | Phase 7 | Done | Native MON deposits; plain transfers rejected to prevent stranding |
 | Agent Registration (`addAgent`) | Phase 7 | Done | Owner-authorized agent creation with nonce bumping and digest binding |
 | Read Views (`accountOf`, `agentOf`, `nonceOf`, `actionHash`) | Phase 7 | Done | Core state inspection and EIP-712 typed action hashing |
-| Spending Velocity & Payments (`pay`, `tryPay`) | Phase 8 | Planned | Daily velocity cap enforcement, non-reverting tryPay, and day rollover |
+| Spending Velocity & Payments (`pay`, `tryPay`) | Phase 8 | Done | Daily velocity cap enforcement, non-reverting tryPay, and day rollover |
 | Destination Target Allowlist (`setTargetAllowed`, `isTargetAllowed`) | Phase 9 | Planned | Per-agent target contract whitelist permissions |
 | Account Lifecycle & Safety (`withdraw`, `setPaused`, `revokeAgent`) | Phase 10 | Planned | Owner withdrawals, emergency freezing, and agent revocation |
 | Native WebAuthn P-256 Precompile (`_verifyOwner`) | Phase 14 | Planned | On-chain signature verification via Monad precompile at `0x0100` |
@@ -307,18 +307,17 @@ function pay(
 ```
 - **Inputs:** `accountId`, `target`, `amount`, `data`.
 - **Caller:** Strict: `msg.sender == agent` (must be active agent for `accountId`).
-- **Checks (Strict - Reverts on policy failure):**
-  - `_accounts[accountId].qx != 0` -> reverts `AccountNotFound`.
-  - `!_accounts[accountId].paused` -> reverts `AccountPaused`.
-  - `_agents[accountId][msg.sender].active` -> reverts `UnauthorizedAgent`.
-  - `_agents[accountId][msg.sender].anyTarget || _targetAllowlist[accountId][msg.sender][target]` -> reverts `TargetNotAllowed`.
-  - `amount > 0` -> reverts `ZeroAmount`.
-  - Day rollover checked: if `currentDay > agent.dayIndex`, `spentToday = 0`, `dayIndex = currentDay`.
-  - `spentToday + amount <= dailyLimit` -> reverts `DailyLimitExceeded`.
-  - `_accounts[accountId].balance >= amount` -> reverts `InsufficientBalance`.
+- **Checks (Strict - Evaluates `_checkPay` and reverts with matching custom error):**
+  1. `amount == 0` -> reverts `ZeroAmount()`.
+  2. Agent not active for account (`!_agents[accountId][agent].active`, covers unknown accounts) -> reverts `UnauthorizedAgent(accountId, agent)`.
+  3. Account paused (`_accounts[accountId].paused`) -> reverts `AccountPaused(accountId)`.
+  4. Target not allowed (`to == address(0)` OR `(!anyTarget && !_targetAllowlist[accountId][agent][to])`) -> reverts `TargetNotAllowed(accountId, agent, target)`.
+  5. Over daily limit (`effectiveSpent + amount > dailyLimit`) -> reverts `DailyLimitExceeded(...)`.
+  6. Insufficient vault balance (`amount > balance`) -> reverts `InsufficientBalance(...)`.
 - **State Changes:**
+  - If `agent.dayIndex != today`: sets `dayIndex = today`, resets `spentToday = 0`.
   - `_agents[accountId][msg.sender].spentToday += uint128(amount)`.
-  - `_accounts[accountId].balance -= amount`.
+  - `_accounts[accountId].balance -= uint128(amount)`.
   - Executes call: `(bool ok, bytes memory res) = target.call{value: amount}(data)`.
   - Asserts `ok` (reverts with `PaymentTransferFailed()`).
 - **Events:** `PaymentExecuted(accountId, msg.sender, target, amount)`.
@@ -332,18 +331,48 @@ function tryPay(
     uint256 amount,
     bytes calldata data
 ) external returns (bool success, PaymentBlockReason reason, bytes memory result);
+
+function tryPay(
+    bytes32 accountId,
+    address payable target,
+    uint256 amount
+) external returns (bool ok, PaymentBlockReason reason);
 ```
-- **Inputs:** `accountId`, `target`, `amount`, `data`.
+- **Inputs:** `accountId`, `target`, `amount`, optional `data`.
 - **Caller:** `msg.sender == agent`.
-- **Checks (Non-Reverting on Policy Failure):**
-  - Evaluates all policy conditions. If any condition fails:
-    - Does NOT revert.
+- **Checks (Non-Reverting Policy Verification):**
+  - Runs `_checkPay(accountId, msg.sender, target, amount)`.
+  - If `reason != PaymentBlockReason.NONE`:
+    - Does NOT revert and does NOT change any state.
     - Emits `PaymentBlocked(accountId, msg.sender, target, amount, reason)`.
-    - Returns `(false, reason, "")`.
-  - Reverts ONLY for reentrancy or physical MON transfer failure (`PaymentTransferFailed`).
+    - Returns `(false, reason, "")` (or `(false, reason)` for 3-arg overload).
+  - Reverts ONLY for reentrancy (`ReentrancyGuardReentrantCall`) or physical MON transfer failure (`PaymentTransferFailed`).
 - **State Changes:**
-  - If approved: updates `spentToday` and `balance`, transfers native MON, emits `PaymentExecuted`, and returns `(true, PaymentBlockReason.NONE, result)`.
+  - If approved: updates `spentToday` and `balance` following CEI, transfers native MON, emits `PaymentExecuted`, and returns `(true, PaymentBlockReason.NONE, result)`.
 - **Events:** `PaymentExecuted` (on success) OR `PaymentBlocked` (on policy block).
+
+### Authoritative Check Order Table (`_checkPay`)
+
+The internal view function `_checkPay(bytes32 accountId, address agent, address to, uint256 amount)` evaluates transaction safety in strict, deterministic order returning `PaymentBlockReason`:
+
+| Order | Check Condition | Failing Condition | Reason Code (`PaymentBlockReason`) | Revert Error on `pay` |
+| --- | --- | --- | --- | --- |
+| 1 | Non-zero amount | `amount == 0` | `ZERO_AMOUNT` | `ZeroAmount()` |
+| 2 | Agent active for account | `!_agents[accountId][agent].active` (covers unknown account) | `AGENT_NOT_ACTIVE` | `UnauthorizedAgent(accountId, agent)` |
+| 3 | Account unpaused | `_accounts[accountId].paused` | `PAUSED` | `AccountPaused(accountId)` |
+| 4 | Destination allowed | `to == address(0)` OR `(!anyTarget && !_targetAllowlist[accountId][agent][to])` | `TARGET_NOT_ALLOWED` | `TargetNotAllowed(accountId, agent, to)` |
+| 5 | Daily spending velocity | `amount > dailyLimit` OR `effectiveSpent + amount > dailyLimit` | `OVER_DAILY_LIMIT` | `DailyLimitExceeded(accountId, agent, req, remaining)` |
+| 6 | Vault balance solvency | `amount > _accounts[accountId].balance` | `INSUFFICIENT_VAULT_BALANCE` | `InsufficientBalance(accountId, amount, balance)` |
+
+#### Target Zero-Address Disallow Rule
+`to == address(0)` is **ALWAYS disallowed**, even if `anyTarget == true`. Autonomous agents cannot accidentally or maliciously transfer vault funds to the burn address `address(0)`.
+
+#### Lazy Daily Reset
+The 24-hour spending window is calculated on-demand (lazy evaluation):
+- `today = uint64(block.timestamp / 1 days)` (UTC midnight boundary).
+- `effectiveSpent = (agent.dayIndex == today) ? agent.spentToday : 0`.
+- In `_executePay`, if `agent.dayIndex != today`, the contract atomically sets `agent.dayIndex = today` and resets `agent.spentToday = 0` before adding the payment amount. No periodic cron jobs or background ticks are required.
+- `remainingToday(accountId, agent)` returns `0` if the agent is inactive; otherwise returns `dailyLimit - effectiveSpent`, floored at `0` (preventing underflow if the owner lowers `dailyLimit` mid-day below what was already spent).
 
 ### 11–16. View Functions
 
