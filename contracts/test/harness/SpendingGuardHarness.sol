@@ -22,18 +22,10 @@ contract SpendingGuardHarness is SpendingGuardBase {
     }
 
     // ========================================================================
-    // TEST-ONLY STATE SETTERS & HELPERS (NEVER IN PRODUCTION)
+    // HARNESS HELPERS (NEVER IN PRODUCTION)
     // ========================================================================
 
-    function setPausedForTest(bytes32 accountId, bool paused) external {
-        _accounts[accountId].paused = paused;
-    }
-
-    function setDailyLimitForTest(bytes32 accountId, address agent, uint128 newDailyLimit) external {
-        _agents[accountId][agent].dailyLimit = newDailyLimit;
-    }
-
-    function signActionForTest(bytes32 accountId, bytes4 selector, bytes memory params)
+    function signActionHarness(bytes32 accountId, bytes4 selector, bytes memory params)
         external
         view
         returns (WebAuthnAuth memory)
@@ -65,28 +57,9 @@ contract SpendingGuardHarness is SpendingGuardBase {
             spentToday: 0,
             dayIndex: uint64(block.timestamp / 1 days),
             active: true,
-            anyTarget: anyTarget
+            anyTarget: anyTarget,
+            revoked: false
         });
         emit AgentAdded(accountId, agent, dailyLimit, anyTarget);
-    }
-
-    // ========================================================================
-    // OUT-OF-SCOPE INTERFACE STUBS (Deferred to Phase 10)
-    // ========================================================================
-
-    function setDailyLimit(bytes32, address, uint128, WebAuthnAuth calldata) external pure override {
-        revert("Phase 10");
-    }
-
-    function revokeAgent(bytes32, address, WebAuthnAuth calldata) external pure override {
-        revert("Phase 10");
-    }
-
-    function setPaused(bytes32, bool, WebAuthnAuth calldata) external pure override {
-        revert("Phase 10");
-    }
-
-    function withdraw(bytes32, address payable, uint256, WebAuthnAuth calldata) external pure override {
-        revert("Phase 10");
     }
 }

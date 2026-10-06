@@ -51,7 +51,7 @@ contract SpendingGuardAllowlistTest is Test {
         view
         returns (ISpendingGuard.WebAuthnAuth memory)
     {
-        return guard.signActionForTest(accId, selector, params);
+        return guard.signActionHarness(accId, selector, params);
     }
 
     function _setTargetAllowed(bytes32 accId, address ag, address target, bool allowed) internal {
@@ -292,7 +292,7 @@ contract SpendingGuardAllowlistTest is Test {
             agent,
             0.1 ether,
             false,
-            secondGuard.signActionForTest(
+            secondGuard.signActionHarness(
                 secondAcc, secondGuard.addAgent.selector, abi.encode(agent, uint128(0.1 ether), false)
             )
         );

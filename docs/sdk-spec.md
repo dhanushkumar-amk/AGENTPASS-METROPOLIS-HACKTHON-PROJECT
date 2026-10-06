@@ -91,6 +91,36 @@ export class AgentPassClient {
   async isTargetAllowed(target: Address, agentAddress?: Address): Promise<boolean>;
 
   /**
+   * Updates an agent's daily spending limit via passkey-authorized owner action.
+   * @param agent Address of the agent.
+   * @param newDailyLimit New limit in wei.
+   * @param auth Passkey WebAuthn signature assertion.
+   */
+  async setDailyLimit(agent: Address, newDailyLimit: bigint, auth: WebAuthnAuth): Promise<Hash>;
+
+  /**
+   * Emergency freezes or unfreezes all outgoing payments for the account.
+   * @param paused True to freeze, false to unfreeze.
+   * @param auth Passkey WebAuthn signature assertion.
+   */
+  async setPaused(paused: boolean, auth: WebAuthnAuth): Promise<Hash>;
+
+  /**
+   * Permanently revokes an agent for the account.
+   * @param agent Address of the agent to revoke.
+   * @param auth Passkey WebAuthn signature assertion.
+   */
+  async revokeAgent(agent: Address, auth: WebAuthnAuth): Promise<Hash>;
+
+  /**
+   * Withdraws vault funds to a designated recipient. Works even while paused.
+   * @param to Destination recipient address.
+   * @param amount Amount of native MON in wei.
+   * @param auth Passkey WebAuthn signature assertion.
+   */
+  async withdraw(to: Address, amount: bigint, auth: WebAuthnAuth): Promise<Hash>;
+
+  /**
    * Translates a numeric PaymentBlockReason enum into clear, actionable plain English.
    * @param reason The reason code returned by tryPay or PaymentBlocked event.
    */

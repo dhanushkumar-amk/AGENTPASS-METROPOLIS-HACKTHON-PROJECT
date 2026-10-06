@@ -94,6 +94,13 @@ interface ISpendingGuard {
     /// @param newLimit Updated daily limit in wei.
     event DailyLimitUpdated(bytes32 indexed accountId, address indexed agent, uint128 oldLimit, uint128 newLimit);
 
+    /// @notice Emitted when an agent's daily limit is configured.
+    /// @param accountId Account owning the agent.
+    /// @param agent Address of the agent.
+    /// @param oldLimit Previous daily limit in wei.
+    /// @param newLimit Updated daily limit in wei.
+    event DailyLimitSet(bytes32 indexed accountId, address indexed agent, uint128 oldLimit, uint128 newLimit);
+
     /// @notice Emitted when a target contract allowlist permission is modified.
     /// @param accountId Account owning the agent.
     /// @param agent Address of the agent.
@@ -197,6 +204,14 @@ interface ISpendingGuard {
 
     /// @notice Thrown when attempting to execute a payment of zero amount.
     error ZeroAmount();
+
+    /// @notice Thrown when attempting to register an agent that was permanently revoked for the account.
+    /// @param accountId Account identifier.
+    /// @param agent Address of the revoked agent.
+    error AgentAlreadyRevoked(bytes32 accountId, address agent);
+
+    /// @notice Thrown when native MON withdrawal transfer to recipient reverts.
+    error TransferFailed();
 
     /// @notice Thrown when native MON transfer to recipient/target reverts.
     error PaymentTransferFailed();

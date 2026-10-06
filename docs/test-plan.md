@@ -88,24 +88,41 @@ This test plan defines the comprehensive Foundry test matrix for `SpendingGuard`
     - Asserts `AnyTargetSet(accountId, agent, true)` emitted and `isTargetAllowed` returns `true` for all non-zero targets.
     - Owner toggles back to `false`; unlisted targets blocked again.
 
-17. **`test_17_revokeAgent_happyPath`**  
-    - Owner calls `revokeAgent(accountId, agent)`.
-    - Asserts `agentOf(accountId, agent).active` becomes `false`.
-    - Asserts emission of `AgentRevoked(accountId, agent)`.
+---
 
-18. **`test_18_setPaused_emergencyFreeze`**  
-    - Owner toggles `setPaused(accountId, true)`.
-    - Asserts `accountOf(accountId).paused == true`.
-    - Asserts emission of `PausedSet(accountId, true)`.
+### Suite 4: Owner Controls & Vault Lifecycle (`SpendingGuardOwnerTest`)
 
-19. **`test_19_withdraw_happyPath`**  
-    - Owner withdraws `0.05 MON` from a `0.1 MON` balance to recipient address.
-    - Asserts recipient native MON balance increases; vault balance decrements.
-    - Asserts emission of `Withdrawn(accountId, recipient, 0.05 ether)`.
+18. **`test_18_setDailyLimit_lifecycle`**  
+    - Owner updates daily spending limit via signed EIP-712 action.
+    - Emits `DailyLimitSet(accountId, agent, oldLimit, newLimit)` and increments nonce by 1.
+    - Idempotent: setting same value does not revert. Zero limit reverts `ZeroAmount`.
+    - Mid-day raising immediately unlocks blocked payments; lowering floors `remainingToday` at 0 without underflow and resets to lowered limit upon day rollover.
 
-20. **`test_20_withdraw_revert_insufficientBalance`**  
-    - Owner attempts to withdraw `0.2 MON` when balance is `0.1 MON`.
-    - Asserts execution reverts with `InsufficientBalance(accountId, 0.2 ether, 0.1 ether)`.
+19. **`test_19_setPaused_emergencyFreeze`**  
+    - Owner freezes account with `setPaused(accountId, true)`.
+    - `tryPay` returns `(false, PAUSED, "")` and emits `PaymentBlocked`. Strict `pay` reverts `AccountPaused`.
+    - Deposits and owner actions (including `withdraw`, `setDailyLimit`, `revokeAgent`, and unpause) remain fully functional while paused.
+    - Unpausing restores payments immediately.
+
+20. **`test_20_revokeAgent_permanentRevocation`**  
+    - Owner permanently revokes agent with `revokeAgent(accountId, agent)`.
+    - Emits `AgentRevoked(accountId, agent)` and sets `active = false, revoked = true`.
+    - Re-adding the revoked agent to the same account reverts `AgentAlreadyRevoked`.
+    - Revoked agent returns 0 for `remainingToday` and `false` for `isTargetAllowed`.
+    - Revoked status is isolated per account: same agent address is unaffected in another account.
+
+21. **`test_21_withdraw_accountingAndProtection`**  
+    - Owner withdraws funds to chosen destination with `withdraw(accountId, to, amount, auth)`.
+    - Partial and full withdrawals reduce vault balance, increase recipient balance, and emit `Withdrawn`.
+    - Reverts on zero amount (`ZeroAmount`), zero address or contract address (`InvalidTarget`), and excess amount (`InsufficientBalance`).
+    - Protected by `nonReentrant`: malicious recipient reentrancy attempt reverts and rolls back balance and nonce.
+    - Rejecting recipient reverts `TransferFailed` with state untouched.
+    - Relayer cannot redirect: signature bound to `(to = A, amount = X)` strictly reverts if submitted with `to = B` or altered amount.
+
+22. **`test_22_ownerActions_digestBindingAndInvariants`**  
+    - Digest binding strictly verified for all four owner functions across wrong accountId, wrong params, wrong selector, wrong chainId, wrong contract instance, and stale nonces. Replay attacks fail.
+    - Fuzz testing verifies random sequences of deposits, payments, limit adjustments, pauses, revokes, and withdrawals against a formal reference model.
+    - Invariants: contract balance $\ge$ sum of tracked balances; total deposited == total paid + total withdrawn + current balances; nonce == count of successful owner actions.
 
 ---
 

@@ -111,10 +111,10 @@ The protocol smart contracts are located in `contracts/src/`:
 | Contract | Role | Status | Description |
 | --- | --- | --- | --- |
 | `ISpendingGuard` | Interface | Specified | Interface defining data structures, events, custom errors, and method signatures |
-| `SpendingGuardBase` | Core Logic | Work-in-Progress (Phase 9 Done) | Abstract base contract implementing accounts, deposits, agent registration, nonces, `pay`, non-reverting `tryPay`, daily spending limit velocity, recipient allowlist, `anyTarget` switch, and views |
+| `SpendingGuardBase` | Core Logic | Work-in-Progress (Phase 10 Done) | Abstract base contract implementing accounts, deposits, agent registration, nonces, `pay`, non-reverting `tryPay`, daily spending limit velocity, recipient allowlist, `anyTarget` switch, daily limit updates, emergency pausing, permanent agent revocation, and vault withdrawals |
 | `HelloMonad` | Pipeline Check | Deployed | Initial pipeline verification contract on Monad Testnet |
 
-*Note: `SpendingGuardBase` implements Phases 7, 8, and 9 (accounts, deposits, agents, views, digests, `pay`, `tryPay`, daily limit window, rollover, recipient allowlist mutations via signed owner actions, `anyTarget` switch, and target allowance query). Future scope logic (owner lifecycle/freeze, `setDailyLimit`, `revokeAgent`, `setPaused`, and `withdraw` in Phase 10, native P-256 precompile verification in Phase 14) remains safely deferred.*
+*Note: `SpendingGuardBase` implements Phases 7, 8, 9, and 10 (accounts, deposits, agents, views, digests, `pay`, non-reverting `tryPay`, daily limit window, rollover, recipient allowlist mutations via signed owner actions, `anyTarget` switch, target allowance query, `setDailyLimit`, `setPaused`, `revokeAgent`, and `withdraw`). NOT done yet: real on-chain passkey verification via Monad's native P-256 precompile at `0x0100` (scheduled for Phase 14) and final production deployment.*
 
 ---
 

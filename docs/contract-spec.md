@@ -16,7 +16,7 @@
 | Read Views (`accountOf`, `agentOf`, `nonceOf`, `actionHash`) | Phase 7 | Done | Core state inspection and EIP-712 typed action hashing |
 | Spending Velocity & Payments (`pay`, `tryPay`) | Phase 8 | Done | Daily velocity cap enforcement, non-reverting tryPay, and day rollover |
 | Destination Target Allowlist (`setTargetAllowed`, `setAnyTarget`, `isTargetAllowed`) | Phase 9 | Done | Per-agent target allowlist permissions, anyTarget toggle, and shared validation |
-| Account Lifecycle & Safety (`withdraw`, `setPaused`, `revokeAgent`) | Phase 10 | Planned | Owner withdrawals, emergency freezing, and agent revocation |
+| Account Lifecycle & Safety (`withdraw`, `setPaused`, `revokeAgent`, `setDailyLimit`) | Phase 10 | Done | Owner withdrawals, emergency freezing, permanent agent revocation, and dynamic limit updates |
 | Native WebAuthn P-256 Precompile (`_verifyOwner`) | Phase 14 | Planned | On-chain signature verification via Monad precompile at `0x0100` |
 
 ---
@@ -75,6 +75,7 @@ struct AgentStorage {
     uint64 dayIndex;            // Slot 1: Day index: block.timestamp / 1 days (8 bytes, offset 0..7)
     bool active;                // Slot 1: True if agent is authorized to transact (1 byte, offset 8)
     bool anyTarget;             // Slot 1: True if target allowlist is bypassed (1 byte, offset 9)
+    bool revoked;               // Slot 1: True if agent was permanently revoked (1 byte, offset 10)
 }
 ```
 
@@ -209,14 +210,19 @@ function setDailyLimit(
 ) external;
 ```
 - **Inputs:** `accountId`, `agent`, `newDailyLimit`, `auth`.
-- **Caller:** Anyone (relayer with valid owner signature).
+- **Caller:** Anyone (relayer with valid owner passkey signature).
 - **Checks:**
-  - Account exists and not paused; agent exists.
-  - Validates owner signature and increments nonce.
+  - Account exists (`AccountNotFound`).
+  - Agent is active for account (`UnauthorizedAgent`).
+  - `newDailyLimit > 0` (`ZeroAmount` if zero; zero limit is rejected, use pause or revoke instead).
+  - Validates EIP-712 owner signature over `(agent, newDailyLimit)` digest and increments nonce.
 - **State Changes:**
-  - Updates `dailyLimit = newDailyLimit`.
-- **Events:** `DailyLimitUpdated(accountId, agent, oldLimit, newDailyLimit)`.
-- **Errors:** `AccountNotFound`, `AccountPaused`, `UnauthorizedAgent`, `InvalidNonce`, `InvalidSignature`.
+  - `_agents[accountId][agent].dailyLimit = newDailyLimit`.
+  - Does NOT reset `spentToday` or `dayIndex`.
+- **Idempotence:** Setting identical daily limit value does NOT revert; verifies signature, increments nonce, and emits event.
+- **Behavior:** Raising limit mid-day unblocks payments immediately; lowering below current day's spend floors `remainingToday` at 0 without underflow and blocks further payments until day rollover.
+- **Events:** `DailyLimitSet(accountId, agent, oldLimit, newDailyLimit)`.
+- **Errors:** `AccountNotFound`, `UnauthorizedAgent`, `ZeroAmount`, `InvalidNonce`, `InvalidSignature`.
 
 ### 5. `setTargetAllowed`
 ```solidity
@@ -271,16 +277,19 @@ function revokeAgent(
 ) external;
 ```
 - **Inputs:** `accountId`, `agent`, `auth`.
-- **Caller:** Anyone (relayer with valid owner signature).
+- **Caller:** Anyone (relayer with valid owner passkey signature).
 - **Checks:**
-  - Account exists; agent is active.
-  - Validates owner signature and increments nonce.
+  - Account exists (`AccountNotFound`).
+  - Agent is currently active (`UnauthorizedAgent`).
+  - Validates EIP-712 owner signature over `(agent)` digest and increments nonce.
 - **State Changes:**
-  - `_agents[accountId][agent].active = false`.
+  - Sets `_agents[accountId][agent].active = false` and marks permanently `revoked = true`.
+- **Permanent Revocation Rule:** An agent address permanently revoked for an account can never be re-added to that account (`addAgent` reverts with `AgentAlreadyRevoked`). A revoked agent in account A is unaffected in account B, and other agents in account A remain unaffected.
+- **Revoked Agent Status:** Revoked agents cannot transact (`pay` reverts `UnauthorizedAgent`, `tryPay` returns `AGENT_NOT_ACTIVE`), `remainingToday` returns 0, and `isTargetAllowed` returns false. Revoking an already revoked agent reverts with `UnauthorizedAgent`.
 - **Events:** `AgentRevoked(accountId, agent)`.
-- **Errors:** `AccountNotFound`, `UnauthorizedAgent`, `InvalidNonce`, `InvalidSignature`.
+- **Errors:** `AccountNotFound`, `UnauthorizedAgent`, `AgentAlreadyRevoked`, `InvalidNonce`, `InvalidSignature`.
 
-### 7. `setPaused`
+### 8. `setPaused`
 ```solidity
 function setPaused(
     bytes32 accountId,
@@ -289,16 +298,18 @@ function setPaused(
 ) external;
 ```
 - **Inputs:** `accountId`, `paused`, `auth`.
-- **Caller:** Anyone (relayer with valid owner signature).
+- **Caller:** Anyone (relayer with valid owner passkey signature).
 - **Checks:**
-  - Account exists.
-  - Validates owner signature and increments nonce.
+  - Account exists (`AccountNotFound`).
+  - Validates EIP-712 owner signature over `(paused)` digest and increments nonce.
 - **State Changes:**
   - `_accounts[accountId].paused = paused`.
+- **Idempotence:** Setting identical pause state does NOT revert; verifies signature, bumps nonce, and emits event.
+- **Pause Invariant:** While paused: `pay` and `tryPay` are blocked with `PAUSED`, owner actions (including `withdraw`, `setDailyLimit`, `revokeAgent`, and unpausing) still work, and incoming `deposit` calls still work.
 - **Events:** `PausedSet(accountId, paused)`.
 - **Errors:** `AccountNotFound`, `InvalidNonce`, `InvalidSignature`.
 
-### 8. `withdraw`
+### 9. `withdraw`
 ```solidity
 function withdraw(
     bytes32 accountId,
@@ -308,17 +319,25 @@ function withdraw(
 ) external;
 ```
 - **Inputs:** `accountId`, `recipient`, `amount`, `auth`.
-- **Caller:** Anyone (relayer with valid owner signature).
+- **Caller:** Anyone (relayer with valid owner passkey signature).
+- **Protection:** Protected by `nonReentrant`.
 - **Checks:**
-  - Account exists; `recipient != address(0)`; `amount > 0`.
-  - `_accounts[accountId].balance >= amount` (reverts with `InsufficientBalance`).
-  - Validates owner signature and increments nonce.
-- **State Changes:**
-  - `_accounts[accountId].balance -= amount`.
-  - Transfers `amount` native MON to `recipient` using low-level `.call{value: amount}("")`.
-  - Reverts with `PaymentTransferFailed()` if transfer fails.
+  - Account exists (`AccountNotFound`).
+  - `recipient != address(0)` and `recipient != address(this)` (`InvalidTarget`).
+  - `amount > 0` (`ZeroAmount`).
+  - `_accounts[accountId].balance >= amount` (`InsufficientBalance`).
+  - Validates EIP-712 owner signature over `(recipient, amount)` digest and increments nonce.
+- **Order of Operations (CEI):**
+  1. Verify owner signature (`_verifyOwner`).
+  2. Increment nonce: `_accounts[accountId].nonce++`.
+  3. Deduct balance: `_accounts[accountId].balance -= amount`.
+  4. Emit `Withdrawn(accountId, recipient, amount)`.
+  5. Transfer native MON to recipient via low-level `.call{value: amount}("")`.
+  6. If transfer fails, revert `TransferFailed()` (reverting the entire transaction so nonce and balance roll back).
+- **Withdraw While Paused:** Withdrawals are fully authorized and functional even while the account is paused.
+- **Relayer Cannot Redirect:** A signature over `(recipient = A, amount = X)` strictly fails if submitted with `recipient = B` or altered amount.
 - **Events:** `Withdrawn(accountId, recipient, amount)`.
-- **Errors:** `AccountNotFound`, `InsufficientBalance`, `PaymentTransferFailed`, `InvalidNonce`, `InvalidSignature`.
+- **Errors:** `AccountNotFound`, `InvalidTarget`, `ZeroAmount`, `InsufficientBalance`, `TransferFailed`, `InvalidNonce`, `InvalidSignature`.
 
 ### 9. `pay`
 ```solidity

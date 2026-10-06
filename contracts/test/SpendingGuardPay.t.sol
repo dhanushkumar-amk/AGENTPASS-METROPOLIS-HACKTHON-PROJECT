@@ -131,7 +131,7 @@ contract SpendingGuardPayTest is Test {
             otherAgent,
             recipient,
             true,
-            guard.signActionForTest(otherAccountId, guard.setTargetAllowed.selector, params)
+            guard.signActionHarness(otherAccountId, guard.setTargetAllowed.selector, params)
         );
         assertTrue(guard.isTargetAllowed(otherAccountId, otherAgent, recipient));
     }
@@ -182,7 +182,9 @@ contract SpendingGuardPayTest is Test {
     }
 
     function test_tryPay_blocked_paused() public {
-        guard.setPausedForTest(testAccountId, true);
+        guard.setPaused(
+            testAccountId, true, guard.signActionHarness(testAccountId, guard.setPaused.selector, abi.encode(true))
+        );
 
         vm.prank(agent);
         vm.expectEmit(true, true, true, true);
@@ -283,7 +285,9 @@ contract SpendingGuardPayTest is Test {
     }
 
     function test_pay_revert_paused() public {
-        guard.setPausedForTest(testAccountId, true);
+        guard.setPaused(
+            testAccountId, true, guard.signActionHarness(testAccountId, guard.setPaused.selector, abi.encode(true))
+        );
         vm.prank(agent);
         vm.expectRevert(abi.encodeWithSelector(ISpendingGuard.AccountPaused.selector, testAccountId));
         guard.pay(testAccountId, payable(recipient), 0.01 ether);
@@ -480,11 +484,21 @@ contract SpendingGuardPayTest is Test {
         assertEq(guard.remainingToday(testAccountId, agent), 0.02 ether);
 
         // Lowered mid-day below spent amount: floors at 0 without underflow
-        guard.setDailyLimitForTest(testAccountId, agent, 0.02 ether);
+        guard.setDailyLimit(
+            testAccountId,
+            agent,
+            0.02 ether,
+            guard.signActionHarness(testAccountId, guard.setDailyLimit.selector, abi.encode(agent, uint128(0.02 ether)))
+        );
         assertEq(guard.remainingToday(testAccountId, agent), 0);
 
         // Raised mid-day: expands allowance and unlocks previously blocked payment
-        guard.setDailyLimitForTest(testAccountId, agent, 0.08 ether);
+        guard.setDailyLimit(
+            testAccountId,
+            agent,
+            0.08 ether,
+            guard.signActionHarness(testAccountId, guard.setDailyLimit.selector, abi.encode(agent, uint128(0.08 ether)))
+        );
         assertEq(guard.remainingToday(testAccountId, agent), 0.05 ether);
 
         vm.prank(agent);

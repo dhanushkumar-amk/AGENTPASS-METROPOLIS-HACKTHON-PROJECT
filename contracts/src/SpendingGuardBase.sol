@@ -32,13 +32,14 @@ abstract contract SpendingGuardBase is ISpendingGuard, ReentrancyGuard {
     /// @notice Storage struct for an autonomous agent policy.
     /// @dev Tightly packed into 2 storage slots:
     ///      Slot 0: dailyLimit (16 bytes, offset 0..15) | spentToday (16 bytes, offset 16..31)
-    ///      Slot 1: dayIndex (8 bytes, offset 0..7) | active (1 byte, offset 8) | anyTarget (1 byte, offset 9)
+    ///      Slot 1: dayIndex (8 bytes, offset 0..7) | active (1 byte, offset 8) | anyTarget (1 byte, offset 9) | revoked (1 byte, offset 10)
     struct AgentStorage {
         uint128 dailyLimit;
         uint128 spentToday;
         uint64 dayIndex;
         bool active;
         bool anyTarget;
+        bool revoked;
     }
 
     /// @dev Mapping from accountId to AccountStorage record.
@@ -123,11 +124,11 @@ abstract contract SpendingGuardBase is ISpendingGuard, ReentrancyGuard {
         if (_accounts[accountId].qx == bytes32(0)) {
             revert AccountNotFound(accountId);
         }
-        if (_accounts[accountId].paused) {
-            revert AccountPaused(accountId);
-        }
         if (agent == address(0)) {
             revert UnauthorizedAgent(accountId, agent);
+        }
+        if (_agents[accountId][agent].revoked) {
+            revert AgentAlreadyRevoked(accountId, agent);
         }
         if (_agents[accountId][agent].active) {
             revert UnauthorizedAgent(accountId, agent);
@@ -145,8 +146,9 @@ abstract contract SpendingGuardBase is ISpendingGuard, ReentrancyGuard {
         _accounts[accountId].nonce = currentNonce + 1;
         // forge-lint: disable-next-line(unsafe-typecast)
         uint64 today = uint64(block.timestamp / 1 days);
-        _agents[accountId][agent] =
-            AgentStorage({dailyLimit: dailyLimit, spentToday: 0, dayIndex: today, active: true, anyTarget: anyTarget});
+        _agents[accountId][agent] = AgentStorage({
+            dailyLimit: dailyLimit, spentToday: 0, dayIndex: today, active: true, anyTarget: anyTarget, revoked: false
+        });
 
         emit AgentAdded(accountId, agent, dailyLimit, anyTarget);
     }
@@ -213,6 +215,137 @@ abstract contract SpendingGuardBase is ISpendingGuard, ReentrancyGuard {
         _agents[accountId][agent].anyTarget = anyTarget;
 
         emit AnyTargetSet(accountId, agent, anyTarget);
+    }
+
+    /// @notice Updates the daily spending limit for an existing active agent.
+    /// @dev Requires a valid WebAuthn signature from the account's passkey owner.
+    ///      Follows checks-effects-interactions: verifies owner signature, bumps nonce, then writes state.
+    ///      Does NOT reset spentToday or dayIndex. Idempotent: setting same value does not revert.
+    /// @param accountId Account owning the agent.
+    /// @param agent Address of the agent.
+    /// @param newDailyLimit New daily spending velocity limit in wei (must be > 0).
+    /// @param auth WebAuthn signature payload verifying owner intent.
+    function setDailyLimit(bytes32 accountId, address agent, uint128 newDailyLimit, WebAuthnAuth calldata auth)
+        external
+    {
+        if (_accounts[accountId].qx == bytes32(0)) {
+            revert AccountNotFound(accountId);
+        }
+        if (!_agents[accountId][agent].active) {
+            revert UnauthorizedAgent(accountId, agent);
+        }
+        if (newDailyLimit == 0) {
+            revert ZeroAmount();
+        }
+
+        uint64 currentNonce = _accounts[accountId].nonce;
+        bytes memory params = abi.encode(agent, newDailyLimit);
+        bytes32 digest = actionHash(accountId, currentNonce, this.setDailyLimit.selector, params);
+
+        _verifyOwner(accountId, digest, auth);
+
+        _accounts[accountId].nonce = currentNonce + 1;
+        uint128 oldLimit = _agents[accountId][agent].dailyLimit;
+        _agents[accountId][agent].dailyLimit = newDailyLimit;
+
+        emit DailyLimitSet(accountId, agent, oldLimit, newDailyLimit);
+    }
+
+    /// @notice Freezes or unfreezes all outgoing agent payments for an account.
+    /// @dev Requires a valid WebAuthn signature from the account's passkey owner.
+    ///      Follows checks-effects-interactions: verifies owner signature, bumps nonce, then writes state.
+    ///      Idempotent: setting same value does not revert.
+    /// @param accountId Account to pause or unpause.
+    /// @param paused True to pause account operations, false to unpause.
+    /// @param auth WebAuthn signature payload verifying owner intent.
+    function setPaused(bytes32 accountId, bool paused, WebAuthnAuth calldata auth) external {
+        if (_accounts[accountId].qx == bytes32(0)) {
+            revert AccountNotFound(accountId);
+        }
+
+        uint64 currentNonce = _accounts[accountId].nonce;
+        bytes memory params = abi.encode(paused);
+        bytes32 digest = actionHash(accountId, currentNonce, this.setPaused.selector, params);
+
+        _verifyOwner(accountId, digest, auth);
+
+        _accounts[accountId].nonce = currentNonce + 1;
+        _accounts[accountId].paused = paused;
+
+        emit PausedSet(accountId, paused);
+    }
+
+    /// @notice Permanently revokes an agent's authorization for an account.
+    /// @dev Requires a valid WebAuthn signature from the account's passkey owner.
+    ///      Follows checks-effects-interactions: verifies owner signature, bumps nonce, then writes state.
+    ///      Once revoked, the agent cannot be re-added.
+    /// @param accountId Account owning the agent.
+    /// @param agent Address of the agent to revoke.
+    /// @param auth WebAuthn signature payload verifying owner intent.
+    function revokeAgent(bytes32 accountId, address agent, WebAuthnAuth calldata auth) external {
+        if (_accounts[accountId].qx == bytes32(0)) {
+            revert AccountNotFound(accountId);
+        }
+        if (!_agents[accountId][agent].active) {
+            revert UnauthorizedAgent(accountId, agent);
+        }
+
+        uint64 currentNonce = _accounts[accountId].nonce;
+        bytes memory params = abi.encode(agent);
+        bytes32 digest = actionHash(accountId, currentNonce, this.revokeAgent.selector, params);
+
+        _verifyOwner(accountId, digest, auth);
+
+        _accounts[accountId].nonce = currentNonce + 1;
+        _agents[accountId][agent].active = false;
+        _agents[accountId][agent].revoked = true;
+
+        emit AgentRevoked(accountId, agent);
+    }
+
+    /// @notice Withdraws deposited native MON from the vault to a designated recipient.
+    /// @dev Requires a valid WebAuthn signature from the account's passkey owner.
+    ///      Follows checks-effects-interactions: verifies owner signature, bumps nonce,
+    ///      decrements balance, emits event, then transfers value. Protected by nonReentrant.
+    ///      Works while account is paused.
+    /// @param accountId Account to withdraw funds from.
+    /// @param recipient Address receiving the native MON.
+    /// @param amount Amount of native MON to withdraw in wei.
+    /// @param auth WebAuthn signature payload verifying owner intent.
+    function withdraw(bytes32 accountId, address payable recipient, uint256 amount, WebAuthnAuth calldata auth)
+        external
+        nonReentrant
+    {
+        if (_accounts[accountId].qx == bytes32(0)) {
+            revert AccountNotFound(accountId);
+        }
+        if (recipient == address(0) || recipient == address(this)) {
+            revert InvalidTarget();
+        }
+        if (amount == 0) {
+            revert ZeroAmount();
+        }
+        uint128 bal = _accounts[accountId].balance;
+        if (amount > bal) {
+            revert InsufficientBalance(accountId, amount, bal);
+        }
+
+        uint64 currentNonce = _accounts[accountId].nonce;
+        bytes memory params = abi.encode(recipient, amount);
+        bytes32 digest = actionHash(accountId, currentNonce, this.withdraw.selector, params);
+
+        _verifyOwner(accountId, digest, auth);
+
+        _accounts[accountId].nonce = currentNonce + 1;
+        // forge-lint: disable-next-line(unsafe-typecast)
+        _accounts[accountId].balance = bal - uint128(amount);
+
+        emit Withdrawn(accountId, recipient, amount);
+
+        (bool success,) = recipient.call{value: amount}("");
+        if (!success) {
+            revert TransferFailed();
+        }
     }
 
     /// @dev Internal helper to revert with the custom error matching the block reason.
