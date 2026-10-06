@@ -40,43 +40,45 @@ AgentPass is purpose-built to take advantage of Monad's high-performance archite
 
 ---
 
-## Architecture Overview
+## Architecture Overview (Design)
 
-```
-+-------------------------------------------------------------+
-|                        Human Owner                          |
-|             (Configures limits, deposits collateral)        |
-+------------------------------+------------------------------+
-                               |
-                               v
-+-------------------------------------------------------------+
-|                      AgentPass Web UI                       |
-|               (Next.js Dashboard & Analytics)               |
-+------------------------------+------------------------------+
-                               |
-            +------------------+------------------+
-            |                                     |
-            v                                     v
-+-----------------------+             +-----------------------+
-|     AI Agent #1       |             |     AI Agent #2       |
-| (Trading / Swaps)     |             | (Data / Payments)     |
-+-----------+-----------+             +-----------+-----------+
-            |                                     |
-            +------------------+------------------+
-                               |
-                               v (Constrained Transactions)
-+-------------------------------------------------------------+
-|                  AgentPass Smart Contracts                  |
-|  - AgentRegistry: Identity registration & owner mapping     |
-|  - PolicyManager: Per-tx & daily spending limit rules       |
-|  - AgentWallet: Smart account executing bounded actions     |
-+------------------------------+------------------------------+
-                               |
-                               v
-+-------------------------------------------------------------+
-|                   Monad Testnet (10143)                     |
-|           (Fast execution, instant finality)                |
-+-------------------------------------------------------------+
+AgentPass is designed as a foundational infrastructure layer providing deterministic spending limits and passkey-verifiable identity for autonomous AI agents on Monad Testnet (Chain ID `10143`).
+
+The architecture centers on a single non-custodial smart contract, `SpendingGuard`:
+- **Passkey Owner Identity:** Human owners control vault accounts using hardware WebAuthn passkeys (P-256 / secp256r1). Management actions (setting budgets, allowlisting targets, registering/revoking agents, emergency pausing, and withdrawals) are authorized on-chain via Monad's native P-256 precompile at `0x0100`.
+- **Relayer Submission:** Owner actions are submitted through an untrusted relayer, providing a gasless owner experience while sequential account nonces prevent replay attacks.
+- **Agent Execution (`pay` & `tryPay`):** Autonomous AI agents transact directly with `SpendingGuard` from their own EOAs. Transactions are strictly bounded by daily velocity limits (24-hour UTC window) and destination allowlists. `tryPay()` provides non-reverting execution with structured `PaymentBlocked` event telemetry.
+- **Serverless Event Feed:** Client applications and dashboards reconstruct account states and transaction streams directly from on-chain event logs without requiring a centralized database.
+
+```mermaid
+graph TB
+    subgraph ClientSide ["Client Side & Agent Runtimes"]
+        Passkey["Hardware Authenticator / Passkey<br/>(P-256 Secure Enclave)"]
+        WebApp["AgentPass Web Application<br/>(Dashboard & Config UI)"]
+        AgentRuntime["AI Agent Runtime<br/>(LangChain / Script / EOA)"]
+    end
+
+    subgraph TransportLayer ["Transport & Relaying"]
+        RelayerAPI["Relayer Service API<br/>(EIP-712 / WebAuthn Transport)"]
+    end
+
+    subgraph MonadNetwork ["Monad Blockchain (Chain ID 10143)"]
+        SpendingGuard["SpendingGuard Contract<br/>(Single Multi-Account Vault)"]
+        Precompile["P-256 Precompile (0x0100)<br/>(~7.3k Gas Verification)"]
+        TargetContracts["Target Protocols / Services<br/>(Allowed Destinations)"]
+        MonadScan["Monad Explorer / RPC<br/>(Event Logs & Status)"]
+    end
+
+    Passkey -->|"Biometric Auth (r, s)"| WebApp
+    WebApp -->|"Signed Owner Action"| RelayerAPI
+    RelayerAPI -->|"Broadcast Tx (Sponsored Gas)"| SpendingGuard
+    SpendingGuard -->|"Staticcall Verification"| Precompile
+
+    AgentRuntime -->|"Direct Calls (pay / tryPay)"| SpendingGuard
+    SpendingGuard -->|"Execute Bounded Payment"| TargetContracts
+
+    SpendingGuard -.->|"Emit Logs (Account, Agent, Payments)"| MonadScan
+    MonadScan -.->|"Index Event Stream (Client Feed)"| WebApp
 ```
 
 ### Workspace Structure
