@@ -104,6 +104,20 @@ graph TB
 
 ---
 
+## Contracts
+
+The protocol smart contracts are located in `contracts/src/`:
+
+| Contract | Role | Status | Description |
+| --- | --- | --- | --- |
+| `ISpendingGuard` | Interface | Specified | Interface defining data structures, events, custom errors, and method signatures |
+| `SpendingGuardBase` | Core Logic | Work-in-Progress (Phase 7) | Abstract base contract implementing storage packing, account creation, deposits, agent registration, views, nonces, and EIP-712 action digests |
+| `HelloMonad` | Pipeline Check | Deployed | Initial pipeline verification contract on Monad Testnet |
+
+*Note: `SpendingGuardBase` currently implements the Phase 7 core baseline. Out-of-scope logic (`pay`/`tryPay`/limits in Phase 8, allowlists in Phase 9, lifecycle in Phase 10, native P-256 precompile verification in Phase 14) is cleanly stubbed in test harness.*
+
+---
+
 ## Deployed Contract Addresses
 
 | Contract | Network | Address | Explorer Link | Status |
@@ -217,7 +231,7 @@ AI coding assistants (Command Code, Google Antigravity) were utilized for reposi
 
 - [Foundry](https://github.com/foundry-rs/foundry) — Fast portable Solidity toolkit (Apache-2.0 / MIT).
 - [forge-std](https://github.com/foundry-rs/forge-std) — Testing and scripting primitives for Foundry (MIT).
-- [OpenZeppelin Contracts](https://github.com/OpenZeppelin/openzeppelin-contracts) — Battle-tested smart contract libraries (MIT).
+- [OpenZeppelin Contracts](https://github.com/OpenZeppelin/openzeppelin-contracts) — Battle-tested smart contract libraries (MIT, pinned to tag `v5.7.0`).
 - [viem](https://viem.sh/) — TypeScript interface for Ethereum and EVM chains (MIT).
 
 ---

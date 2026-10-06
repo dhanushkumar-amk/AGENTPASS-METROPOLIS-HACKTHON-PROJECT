@@ -130,7 +130,13 @@ interface ISpendingGuard {
     /// @param target Destination address.
     /// @param amount Amount of native MON requested in wei.
     /// @param reason Categorized reason explaining why the payment was blocked.
-    event PaymentBlocked(bytes32 indexed accountId, address indexed agent, address indexed target, uint256 amount, PaymentBlockReason reason);
+    event PaymentBlocked(
+        bytes32 indexed accountId,
+        address indexed agent,
+        address indexed target,
+        uint256 amount,
+        PaymentBlockReason reason
+    );
 
     // ==========================================
     // CUSTOM ERRORS
@@ -213,13 +219,8 @@ interface ISpendingGuard {
     /// @param dailyLimit Daily spending velocity limit in wei.
     /// @param anyTarget If true, grants permission to call any destination address.
     /// @param auth WebAuthn signature payload verifying owner intent.
-    function addAgent(
-        bytes32 accountId,
-        address agent,
-        uint128 dailyLimit,
-        bool anyTarget,
-        WebAuthnAuth calldata auth
-    ) external;
+    function addAgent(bytes32 accountId, address agent, uint128 dailyLimit, bool anyTarget, WebAuthnAuth calldata auth)
+        external;
 
     /// @notice Updates the daily spending limit for an existing agent.
     /// @dev Requires a valid WebAuthn signature from the account's passkey owner.
@@ -227,12 +228,7 @@ interface ISpendingGuard {
     /// @param agent Address of the agent.
     /// @param newDailyLimit New daily spending velocity limit in wei.
     /// @param auth WebAuthn signature payload verifying owner intent.
-    function setDailyLimit(
-        bytes32 accountId,
-        address agent,
-        uint128 newDailyLimit,
-        WebAuthnAuth calldata auth
-    ) external;
+    function setDailyLimit(bytes32 accountId, address agent, uint128 newDailyLimit, WebAuthnAuth calldata auth) external;
 
     /// @notice Grants or revokes permission for an agent to call a specific target address.
     /// @dev Requires a valid WebAuthn signature from the account's passkey owner.
@@ -254,22 +250,14 @@ interface ISpendingGuard {
     /// @param accountId Account owning the agent.
     /// @param agent Address of the agent to revoke.
     /// @param auth WebAuthn signature payload verifying owner intent.
-    function revokeAgent(
-        bytes32 accountId,
-        address agent,
-        WebAuthnAuth calldata auth
-    ) external;
+    function revokeAgent(bytes32 accountId, address agent, WebAuthnAuth calldata auth) external;
 
     /// @notice Freezes or unfreezes all outgoing agent payments for an account.
     /// @dev Requires a valid WebAuthn signature from the account's passkey owner.
     /// @param accountId Account to pause or unpause.
     /// @param paused True to pause account operations, false to unpause.
     /// @param auth WebAuthn signature payload verifying owner intent.
-    function setPaused(
-        bytes32 accountId,
-        bool paused,
-        WebAuthnAuth calldata auth
-    ) external;
+    function setPaused(bytes32 accountId, bool paused, WebAuthnAuth calldata auth) external;
 
     /// @notice Withdraws deposited native MON from the vault to a designated recipient.
     /// @dev Requires a valid WebAuthn signature from the account's passkey owner.
@@ -277,12 +265,7 @@ interface ISpendingGuard {
     /// @param recipient Address receiving the native MON.
     /// @param amount Amount of native MON to withdraw in wei.
     /// @param auth WebAuthn signature payload verifying owner intent.
-    function withdraw(
-        bytes32 accountId,
-        address payable recipient,
-        uint256 amount,
-        WebAuthnAuth calldata auth
-    ) external;
+    function withdraw(bytes32 accountId, address payable recipient, uint256 amount, WebAuthnAuth calldata auth) external;
 
     /// @notice Executes a payment on behalf of an account. Reverts if any policy rule fails.
     /// @dev Only callable by an active agent (msg.sender == agent). Reverts on violation.
@@ -291,12 +274,9 @@ interface ISpendingGuard {
     /// @param amount Native MON amount to transfer in wei.
     /// @param data Optional calldata for smart contract execution.
     /// @return result Returndata from the target call if calldata was provided.
-    function pay(
-        bytes32 accountId,
-        address payable target,
-        uint256 amount,
-        bytes calldata data
-    ) external returns (bytes memory result);
+    function pay(bytes32 accountId, address payable target, uint256 amount, bytes calldata data)
+        external
+        returns (bytes memory result);
 
     /// @notice Non-reverting payment execution for autonomous agents.
     /// @dev Emits PaymentBlocked and returns (false, reason, "") on policy failure.
@@ -308,12 +288,9 @@ interface ISpendingGuard {
     /// @return success True if payment executed successfully, false if blocked by policy.
     /// @return reason Reason code explaining why payment was blocked (NONE if successful).
     /// @return result Returndata from the target call if successful.
-    function tryPay(
-        bytes32 accountId,
-        address payable target,
-        uint256 amount,
-        bytes calldata data
-    ) external returns (bool success, PaymentBlockReason reason, bytes memory result);
+    function tryPay(bytes32 accountId, address payable target, uint256 amount, bytes calldata data)
+        external
+        returns (bool success, PaymentBlockReason reason, bytes memory result);
 
     // ==========================================
     // VIEW / PURE FUNCTIONS
@@ -329,13 +306,7 @@ interface ISpendingGuard {
     function accountOf(bytes32 accountId)
         external
         view
-        returns (
-            bytes32 qx,
-            bytes32 qy,
-            uint256 balance,
-            uint64 nonce,
-            bool paused
-        );
+        returns (bytes32 qx, bytes32 qy, uint256 balance, uint64 nonce, bool paused);
 
     /// @notice Returns the policy details and state for an agent under an account.
     /// @param accountId Account identifier.
@@ -348,13 +319,7 @@ interface ISpendingGuard {
     function agentOf(bytes32 accountId, address agent)
         external
         view
-        returns (
-            bool active,
-            uint128 dailyLimit,
-            uint128 spentToday,
-            uint64 dayIndex,
-            bool anyTarget
-        );
+        returns (bool active, uint128 dailyLimit, uint128 spentToday, uint64 dayIndex, bool anyTarget);
 
     /// @notice Returns the remaining spending capacity for an agent in the current day window.
     /// @dev Accounts for 24-hour day rollover dynamically: if block.timestamp / 1 days > dayIndex,
@@ -369,11 +334,7 @@ interface ISpendingGuard {
     /// @param agent Address of the agent.
     /// @param target Destination address to evaluate.
     /// @return allowed True if the agent is authorized to call target.
-    function isTargetAllowed(
-        bytes32 accountId,
-        address agent,
-        address target
-    ) external view returns (bool allowed);
+    function isTargetAllowed(bytes32 accountId, address agent, address target) external view returns (bool allowed);
 
     /// @notice Returns the current replay protection nonce for an account.
     /// @param accountId Account identifier.
@@ -386,10 +347,8 @@ interface ISpendingGuard {
     /// @param actionSelector Function selector of the owner action.
     /// @param params ABI-encoded parameters specific to the action selector.
     /// @return digest 32-byte digest binding chainId, contract, accountId, nonce, selector, params.
-    function actionHash(
-        bytes32 accountId,
-        uint64 nonce,
-        bytes4 actionSelector,
-        bytes memory params
-    ) external view returns (bytes32 digest);
+    function actionHash(bytes32 accountId, uint64 nonce, bytes4 actionSelector, bytes memory params)
+        external
+        view
+        returns (bytes32 digest);
 }

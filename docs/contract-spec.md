@@ -6,6 +6,21 @@
 
 ---
 
+## Implementation status
+
+| Component / Functionality | Scope Phase | Status | Details |
+| --- | --- | --- | --- |
+| Account Creation (`createAccount`) | Phase 7 | Done | Permissionless P-256 account derivation and initialization |
+| Vault Deposits (`deposit`, `receive`, `fallback`) | Phase 7 | Done | Native MON deposits; plain transfers rejected to prevent stranding |
+| Agent Registration (`addAgent`) | Phase 7 | Done | Owner-authorized agent creation with nonce bumping and digest binding |
+| Read Views (`accountOf`, `agentOf`, `nonceOf`, `actionHash`) | Phase 7 | Done | Core state inspection and EIP-712 typed action hashing |
+| Spending Velocity & Payments (`pay`, `tryPay`) | Phase 8 | Planned | Daily velocity cap enforcement, non-reverting tryPay, and day rollover |
+| Destination Target Allowlist (`setTargetAllowed`, `isTargetAllowed`) | Phase 9 | Planned | Per-agent target contract whitelist permissions |
+| Account Lifecycle & Safety (`withdraw`, `setPaused`, `revokeAgent`) | Phase 10 | Planned | Owner withdrawals, emergency freezing, and agent revocation |
+| Native WebAuthn P-256 Precompile (`_verifyOwner`) | Phase 14 | Planned | On-chain signature verification via Monad precompile at `0x0100` |
+
+---
+
 ## Data Structures
 
 ### 1. Enums
@@ -39,37 +54,37 @@ struct WebAuthnAuth {
 }
 ```
 
-#### `Account`
+#### `Account` (Storage Layout: 3 Slots)
 Stores the root passkey configuration and deposited capital for a human owner:
 ```solidity
-struct Account {
-    bytes32 qx;                 // P-256 public key x-coordinate
-    bytes32 qy;                 // P-256 public key y-coordinate
-    uint256 balance;            // Deposited native MON balance in wei
-    uint64 nonce;               // Replay protection counter for owner actions
-    bool paused;                // Emergency freeze toggle
+struct AccountStorage {
+    bytes32 qx;                 // Slot 0: P-256 public key x-coordinate (32 bytes)
+    bytes32 qy;                 // Slot 1: P-256 public key y-coordinate (32 bytes)
+    uint128 balance;            // Slot 2: Deposited native MON balance (16 bytes, offset 0..15)
+    uint64 nonce;               // Slot 2: Replay protection counter (8 bytes, offset 16..23)
+    bool paused;                // Slot 2: Emergency freeze toggle (1 byte, offset 24)
 }
 ```
 
-#### `Agent`
+#### `Agent` (Storage Layout: 2 Slots)
 Stores the authorization and spending metrics for an AI agent:
 ```solidity
-struct Agent {
-    bool active;                // True if agent is authorized to transact
-    uint128 dailyLimit;         // Maximum native MON spendable per 24-hour UTC day (wei)
-    uint128 spentToday;         // Cumulative native MON spent in the current day window (wei)
-    uint64 dayIndex;            // Day index: block.timestamp / 1 days
-    bool anyTarget;             // True if target allowlist is bypassed
+struct AgentStorage {
+    uint128 dailyLimit;         // Slot 0: Maximum native MON spendable per 24h day (16 bytes, offset 0..15)
+    uint128 spentToday;         // Slot 0: Cumulative native MON spent today (16 bytes, offset 16..31)
+    uint64 dayIndex;            // Slot 1: Day index: block.timestamp / 1 days (8 bytes, offset 0..7)
+    bool active;                // Slot 1: True if agent is authorized to transact (1 byte, offset 8)
+    bool anyTarget;             // Slot 1: True if target allowlist is bypassed (1 byte, offset 9)
 }
 ```
 
 ### 3. Storage Layout
 
 The contract maintains three core mappings:
-- `mapping(bytes32 => Account) internal _accounts;`  
-  Maps `accountId` to the owner's `Account` record.
-- `mapping(bytes32 => mapping(address => Agent)) internal _agents;`  
-  Maps `accountId` and `agent` EOA address to the `Agent` policy record.
+- `mapping(bytes32 => AccountStorage) internal _accounts;`  
+  Maps `accountId` to the owner's `AccountStorage` record.
+- `mapping(bytes32 => mapping(address => AgentStorage)) internal _agents;`  
+  Maps `accountId` and `agent` EOA address to the `AgentStorage` policy record.
 - `mapping(bytes32 => mapping(address => mapping(address => bool))) internal _targetAllowlist;`  
   Maps `accountId`, `agent`, and destination `target` address to permission flag.
 

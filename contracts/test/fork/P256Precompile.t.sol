@@ -7,10 +7,12 @@ contract P256PrecompileTest is Test {
     address constant P256_PRECOMPILE = address(0x0000000000000000000000000000000000000100);
 
     // Verified P-256 test vector (160 bytes: hash[32] || r[32] || s[32] || x[32] || y[32])
-    bytes constant VALID_INPUT = hex"d972c2ac02cc918c29fc1819476a6eed6671118fb0359a9b7a0c4f5fc4b25dd173299ebdbbcdae49e05f8e0ce305ac0b24988c6fc284ee6569a21dd17beb72f608202481988e78f2d1047867912416ac2c9ae3a554ee3eca59f02ea0c5f17f90ba3f24fb7b03f2e0720d70984fe1dbeafdc0133b371f6490fe02138b96a4250de99f23cb34ae6bdb48d2cd43aa8ae67d4271fa16b98fb6501bf41d2ebd0f7116";
+    bytes constant VALID_INPUT =
+        hex"d972c2ac02cc918c29fc1819476a6eed6671118fb0359a9b7a0c4f5fc4b25dd173299ebdbbcdae49e05f8e0ce305ac0b24988c6fc284ee6569a21dd17beb72f608202481988e78f2d1047867912416ac2c9ae3a554ee3eca59f02ea0c5f17f90ba3f24fb7b03f2e0720d70984fe1dbeafdc0133b371f6490fe02138b96a4250de99f23cb34ae6bdb48d2cd43aa8ae67d4271fa16b98fb6501bf41d2ebd0f7116";
 
     // Tampered test vector (first byte altered from d9 to 00)
-    bytes constant TAMPERED_INPUT = hex"0072c2ac02cc918c29fc1819476a6eed6671118fb0359a9b7a0c4f5fc4b25dd173299ebdbbcdae49e05f8e0ce305ac0b24988c6fc284ee6569a21dd17beb72f608202481988e78f2d1047867912416ac2c9ae3a554ee3eca59f02ea0c5f17f90ba3f24fb7b03f2e0720d70984fe1dbeafdc0133b371f6490fe02138b96a4250de99f23cb34ae6bdb48d2cd43aa8ae67d4271fa16b98fb6501bf41d2ebd0f7116";
+    bytes constant TAMPERED_INPUT =
+        hex"0072c2ac02cc918c29fc1819476a6eed6671118fb0359a9b7a0c4f5fc4b25dd173299ebdbbcdae49e05f8e0ce305ac0b24988c6fc284ee6569a21dd17beb72f608202481988e78f2d1047867912416ac2c9ae3a554ee3eca59f02ea0c5f17f90ba3f24fb7b03f2e0720d70984fe1dbeafdc0133b371f6490fe02138b96a4250de99f23cb34ae6bdb48d2cd43aa8ae67d4271fa16b98fb6501bf41d2ebd0f7116";
 
     function setUp() public {
         try vm.createSelectFork("monad_testnet") {} catch {}

@@ -4,6 +4,10 @@ out = "out"
 libs = ["lib"]
 solc = "0.8.28"
 
+remappings = [
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+]
+
 # Foundry 1.8.4 natively supports `network = "monad"`, which configures EVM compatibility
 # and defaults evm_version to "prague" without requiring manual overrides.
 network = "monad"
