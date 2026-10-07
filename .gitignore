@@ -12,6 +12,7 @@ node_modules/
 out/
 dist/
 build/
+web/spike-output/
 
 # Foundry
 cache/

@@ -1,0 +1,17 @@
+{
+  "_description": "Deterministic throwaway test vector for AgentPass Phase 13/14 tests. NOT FOR PRODUCTION.",
+  "challenge": "0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+  "hash": "0x4f8936f0110ad76fdf60a5a8d9858e5305d5a28ff35ce301138020b0b4079fa4",
+  "r": "0xdef3619852832bda284e7bfe633b065fa11f185536704ed8c51af11d4a7c92e4",
+  "s": "0x80a0c18af23920c4a55a54da3f6b00171d9d4605cda122fada20a201e49b1024",
+  "sLow": "0x7f5f3e740dc6df3c5aa5ab25c094ffe89f49b4a7d9767b8a199928c117c8152d",
+  "qx": "0x515c3d6eb9e396b904d3feca7f54fdcd0cc1e997bf375dca515ad0a6c3b4035f",
+  "qy": "0x4536be3a50f318fbf9a5475902a221502bef0d57e08c53b2cc0a56f17d9f9354",
+  "accountId": "0x1df88c169b8cbb3db06212fb987c4ed637d4126d07bed809d33c5a17dc3d87f3",
+  "authenticatorData": "0x49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97630500000001",
+  "clientDataJSON": "{\"type\":\"webauthn.get\",\"challenge\":\"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA\",\"origin\":\"http://localhost:3000\",\"crossOrigin\":false}",
+  "typeIndex": 1,
+  "challengeIndex": 23,
+  "rpId": "localhost",
+  "origin": "http://localhost:3000"
+}

@@ -52,7 +52,36 @@ The architecture centers on a single non-custodial smart contract, `SpendingGuar
 - **Agent Execution (`pay` & `tryPay`):** Autonomous AI agents transact directly with `SpendingGuard` from their own EOAs. Transactions are strictly bounded by daily velocity limits (24-hour UTC window) and destination allowlists. `tryPay()` provides non-reverting execution with structured `PaymentBlocked` event telemetry.
 - **Serverless Event Feed:** Client applications and dashboards reconstruct account states and transaction streams directly from on-chain event logs without requiring a centralized database.
 
-![AgentPass Architecture](img/architecture.png)
+```mermaid
+graph TB
+    subgraph ClientSide ["Client Side & Agent Runtimes"]
+        Passkey["Hardware Authenticator / Passkey<br/>(P-256 Secure Enclave)"]
+        WebApp["AgentPass Web Application<br/>(Dashboard & Config UI)"]
+        AgentRuntime["AI Agent Runtime<br/>(LangChain / Script / EOA)"]
+    end
+
+    subgraph TransportLayer ["Transport & Relaying"]
+        RelayerAPI["Relayer Service API<br/>(EIP-712 / WebAuthn Transport)"]
+    end
+
+    subgraph MonadNetwork ["Monad Blockchain (Chain ID 10143)"]
+        SpendingGuard["SpendingGuard Contract<br/>(Single Multi-Account Vault)"]
+        Precompile["P-256 Precompile (0x0100)<br/>(~7.3k Gas Verification)"]
+        TargetContracts["Target Protocols / Services<br/>(Allowed Destinations)"]
+        MonadScan["Monad Explorer / RPC<br/>(Event Logs & Status)"]
+    end
+
+    Passkey -->|"Biometric Auth (r, s)"| WebApp
+    WebApp -->|"Signed Owner Action"| RelayerAPI
+    RelayerAPI -->|"Broadcast Tx (Sponsored Gas)"| SpendingGuard
+    SpendingGuard -->|"Staticcall Verification"| Precompile
+
+    AgentRuntime -->|"Direct Calls (pay / tryPay)"| SpendingGuard
+    SpendingGuard -->|"Execute Bounded Payment"| TargetContracts
+
+    SpendingGuard -.->|"Emit Logs (Account, Agent, Payments)"| MonadScan
+    MonadScan -.->|"Index Event Stream (Client Feed)"| WebApp
+```
 
 ### Workspace Structure
 
@@ -156,7 +185,26 @@ The protocol smart contracts are located in `contracts/src/`:
    cd .. && ./scripts/deploy-hello.sh
    ```
 
-### 4. Web Dashboard (Upcoming)
+### 4. Passkey Spike & Verification
+
+The passkey library (`web/src/lib/passkey`) provides framework-free P-256 WebAuthn credential creation, assertion parsing, low-s normalization, candidate recovery, and local dual verification.
+
+- **Status:** Tested against the on-chain Monad testnet precompile at `0x0100` via read-only `cast call` (`scripts/check-passkey-vector.sh`), but **not yet integrated with the smart contract** (on-chain passkey verification will be connected in Phase 14).
+- **Run Unit Tests (Vitest):**
+  ```bash
+  npm test
+  ```
+- **Verify Precompile Acceptance on Monad Testnet:**
+  ```bash
+  ./scripts/check-passkey-vector.sh web/test-fixtures/software-vector.json
+  ```
+- **Run Spike Page:**
+  ```bash
+  cd web && npm run dev
+  ```
+  Open [http://localhost:3000/spike/passkey](http://localhost:3000/spike/passkey) to interactively create a passkey, sign a 32-byte challenge, view recovered candidates, and copy vector JSON.
+
+### 5. Web Dashboard (Upcoming)
 
 ```bash
 cd web
@@ -165,7 +213,7 @@ npm run dev
 ```
 Open [http://localhost:3000](http://localhost:3000) to view the agent management interface.
 
-### 5. AI Agent Runtime (Upcoming)
+### 6. AI Agent Runtime (Upcoming)
 
 ```bash
 cd agent
@@ -238,6 +286,9 @@ AI coding assistants (Command Code, Google Antigravity) were utilized for reposi
 - [forge-std](https://github.com/foundry-rs/forge-std) — Testing and scripting primitives for Foundry (MIT).
 - [OpenZeppelin Contracts](https://github.com/OpenZeppelin/openzeppelin-contracts) — Battle-tested smart contract libraries (MIT, pinned to tag `v5.7.0`).
 - [viem](https://viem.sh/) — TypeScript interface for Ethereum and EVM chains (MIT).
+- [@noble/curves](https://github.com/paulmillr/noble-curves) — Audited, minimal JS implementation of elliptic curve cryptography including secp256r1 / P-256 (MIT, pinned to `1.8.1`).
+- [@noble/hashes](https://github.com/paulmillr/noble-hashes) — Minimal, audited JS implementation of cryptographic hashes including SHA-256 and Keccak-256 (MIT, pinned to `1.7.1`).
+- [vitest](https://vitest.dev/) — Next-generation unit testing framework (MIT, pinned to `5.0.3`).
 
 ---
 
